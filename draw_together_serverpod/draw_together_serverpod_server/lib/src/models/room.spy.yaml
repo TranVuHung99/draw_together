@@ -1,0 +1,9 @@
+class: Room
+table: room
+fields:
+  roomCode: String
+  hostId: int
+  status: String
+  canvasWidth: double
+  canvasHeight: double
+  endTime: DateTime?

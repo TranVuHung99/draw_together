@@ -1,0 +1,4 @@
+class: FinalCanvasMsg
+fields:
+  roomId: int
+  base64Image: String

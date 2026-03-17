@@ -1,0 +1,3 @@
+class: RoomSubscribeMsg
+fields:
+  roomId: int

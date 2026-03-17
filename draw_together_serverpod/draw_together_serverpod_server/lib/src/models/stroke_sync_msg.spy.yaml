@@ -1,0 +1,12 @@
+class: StrokeSyncMsg
+fields:
+  roomId: int
+  playerId: int
+  strokeId: String       # Unique ID for this specific line (e.g., UUID or playerId_timestamp)
+  action: String         # 'start', 'update', or 'end'
+  # Store points as alternating x, y values (x1, y1, x2, y2, etc.) to keep it simple and efficient over network
+  points: List<double>
+  colorInfo: String
+  strokeWidth: double
+  isEraser: bool
+  timestamp: DateTime

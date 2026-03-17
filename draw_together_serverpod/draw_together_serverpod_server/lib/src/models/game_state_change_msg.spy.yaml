@@ -1,0 +1,5 @@
+class: GameStateChangeMsg
+fields:
+  roomId: int
+  status: String
+  endTime: DateTime?

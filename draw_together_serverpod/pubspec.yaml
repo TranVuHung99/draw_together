@@ -1,0 +1,13 @@
+name: _
+publish_to: none
+
+environment:
+  sdk: '^3.8.0'
+
+workspace:
+  - draw_together_serverpod_client
+  - draw_together_serverpod_server
+  - draw_together_serverpod_flutter
+dependency_overrides:
+  flutter_secure_storage: ^10.0.0
+

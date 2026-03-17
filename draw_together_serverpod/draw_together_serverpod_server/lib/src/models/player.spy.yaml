@@ -1,0 +1,10 @@
+class: Player
+table: player
+fields:
+  roomId: int
+  name: String
+  colorInfo: String?
+  regionX: double
+  regionY: double
+  regionWidth: double
+  regionHeight: double

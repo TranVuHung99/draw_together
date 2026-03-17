@@ -1,0 +1,23 @@
+emailIdp:
+  - login:
+  - startRegistration:
+  - verifyRegistrationCode:
+  - finishRegistration:
+  - startPasswordReset:
+  - verifyPasswordResetCode:
+  - finishPasswordReset:
+  - hasAccount:
+jwtRefresh:
+  - refreshAccessToken:
+gameStreaming:
+  - live:
+room:
+  - createRoom:
+  - joinRoom:
+  - startGame:
+  - endGame:
+  - getPlayer:
+  - getRoom:
+  - getPlayersInRoom:
+greeting:
+  - hello:
