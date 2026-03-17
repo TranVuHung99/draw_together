@@ -60,7 +60,7 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
     final isHost = room.hostId == currentPlayer.id;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Room: \${room.roomCode}')),
+      appBar: AppBar(title: Text('Room: ${room.roomCode}')),
       body: Center(
         child: Column(
           children: [

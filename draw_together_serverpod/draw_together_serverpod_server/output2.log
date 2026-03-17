@@ -1,0 +1,49 @@
+SERVERPOD version: 3.3.1, dart: 3.10.1 (stable) (Tue Nov 18 11:02:31 2025 -0800) on "linux_x64", time: 2026-03-17 07:51:34.778641Z
+runMode: development
+serverId: default
+role: monolith
+loggingMode: normal
+applyMigrations: true
+applyRepairMigration: false
+SERVERPOD initialized, time: 2026-03-17 07:51:34.844845Z
+Failed to apply migration 20260224075052782.
+DatabaseQueryException: { message: column "roomId" specified more than once, code: 42701 }
+2026-03-17 07:51:35.114663Z ERROR: Failed to apply database migrations.
+2026-03-17 07:51:35.114663Z ERROR: DatabaseQueryException: { message: column "roomId" specified more than once, code: 42701 }
+package:postgres/src/v3/connection.dart 930:37                                    _PgResultStreamSubscription.handleError
+package:postgres/src/v3/connection.dart 530:21                                    PgConnectionImplementation._handleMessage
+dart:async/zone.dart 1538:47                                                      _rootRunUnary
+dart:async/zone.dart 1429:19                                                      _CustomZone.runUnary
+dart:async/zone.dart 1329:7                                                       _CustomZone.runUnaryGuarded
+dart:async/stream_impl.dart 381:11                                                _BufferingStreamSubscription._sendData
+dart:async/stream_impl.dart 312:7                                                 _BufferingStreamSubscription._add
+dart:async/stream_controller.dart 798:19                                          _SyncStreamControllerDispatch._sendData
+dart:async/stream_controller.dart 663:7                                           _StreamController._add
+dart:async/stream_controller.dart 618:5                                           _StreamController.add
+dart:async/stream.dart 823:20                                                     Stream.asyncMap.<fn>.add
+dart:async/zone.dart 1538:47                                                      _rootRunUnary
+dart:async/zone.dart 1429:19                                                      _CustomZone.runUnary
+dart:async/stream_impl.dart 215:3                                                 _BufferingStreamSubscription.resume
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 871:44                                    new _PgResultStreamSubscription.simpleQueryProtocol
+package:postgres/src/v3/connection.dart 165:61                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 309:24                                   _PoolConnection.execute
+package:postgres/src/pool/pool_impl.dart 64:34                                    PoolImplementation.execute.<fn>
+package:postgres/src/pool/pool_impl.dart 153:24                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 527:20  DatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 607:18  DatabaseConnection.simpleExecute
+package:serverpod/src/database/migrations/migration_manager.dart 182:9            MigrationManager._migrateToLatestModule
+package:serverpod/src/database/migrations/migration_manager.dart 83:27            MigrationManager.migrateToLatest.<fn>
+package:serverpod/src/database/migrations/migration_manager.dart 252:9            MigrationManager._withMigrationLock.<fn>
+package:postgres/src/v3/connection.dart 591:24                                    PgConnectionImplementation.runTx.<fn>
+package:pool/pool.dart 127:14                                                     Pool.withResource
+package:postgres/src/pool/pool_impl.dart 153:16                                   PoolImplementation.withConnection
+package:serverpod/src/database/database.dart 399:12                               Database.transaction
+package:serverpod/src/database/migrations/migration_manager.dart 245:5            MigrationManager._withMigrationLock
+package:serverpod/src/database/migrations/migration_manager.dart 70:5             MigrationManager.migrateToLatest
+package:serverpod/src/server/serverpod.dart 837:33                                Serverpod._applyMigrations
+package:serverpod/src/server/serverpod.dart 695:7                                 Serverpod._unguardedStart
+package:serverpod/src/server/serverpod.dart 658:9                                 Serverpod.start.<fn>
+package:serverpod/src/server/serverpod.dart 657:7                                 Serverpod.start
+package:draw_together_serverpod_server/server.dart 77:3                           run
+

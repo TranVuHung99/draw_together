@@ -223,15 +223,16 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
           DropdownButton<Color>(
             value: _myColor,
             items:
-                [
-                  Colors.black,
-                  Colors.red,
-                  Colors.green,
-                  Colors.blue,
-                  Colors.yellow,
-                  Colors.orange,
-                  Colors.purple,
-                ].map((Color color) {
+                {
+                  _myColor, // Ensure current color is in the list
+                  const Color(0xFF000000), // black
+                  const Color(0xFFF44336), // red
+                  const Color(0xFF4CAF50), // green
+                  const Color(0xFF2196F3), // blue
+                  const Color(0xFFFFEB3B), // yellow
+                  const Color(0xFFFF9800), // orange
+                  const Color(0xFF9C27B0), // purple
+                }.map((Color color) {
                   return DropdownMenuItem<Color>(
                     value: color,
                     child: Container(width: 24, height: 24, color: color),
