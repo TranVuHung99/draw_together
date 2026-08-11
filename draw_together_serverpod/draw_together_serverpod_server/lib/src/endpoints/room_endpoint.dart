@@ -69,14 +69,11 @@ class RoomEndpoint extends Endpoint {
     ];
     final randomColor = colors[Random().nextInt(colors.length)];
 
+    // Regions are assigned when the game starts, not at join time.
     var newPlayer = Player(
       roomId: roomInfo.id!,
       name: playerName,
       colorInfo: randomColor,
-      regionX: 0,
-      regionY: 0,
-      regionWidth: roomInfo.canvasWidth,
-      regionHeight: roomInfo.canvasHeight,
     );
 
     newPlayer = await Player.db.insertRow(session, newPlayer);

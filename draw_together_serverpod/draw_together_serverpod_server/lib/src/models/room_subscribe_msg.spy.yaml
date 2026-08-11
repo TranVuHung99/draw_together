@@ -1,3 +1,5 @@
 class: RoomSubscribeMsg
 fields:
   roomId: int
+  # Identifies the subscriber so the server can suppress echoing their own strokes back
+  playerId: int

@@ -5,6 +5,9 @@ fields:
   strokeId: String       # Unique ID for this specific line (e.g., UUID or playerId_timestamp)
   action: String         # 'start', 'update', or 'end'
   # Store points as alternating x, y values (x1, y1, x2, y2, etc.) to keep it simple and efficient over network
+  # Coordinates are normalized fractions of the full canvas in the range 0.0-1.0, where
+  # (0.0, 0.0) is the canvas top-left and (1.0, 1.0) the bottom-right. Never widget pixels:
+  # clients convert to and from local pixels at the edges so rendering is resolution-independent.
   points: List<double>
   colorInfo: String
   strokeWidth: double

@@ -14,25 +14,40 @@ import 'package:serverpod/serverpod.dart' as _i1;
 
 abstract class RoomSubscribeMsg
     implements _i1.SerializableModel, _i1.ProtocolSerialization {
-  RoomSubscribeMsg._({required this.roomId});
+  RoomSubscribeMsg._({
+    required this.roomId,
+    required this.playerId,
+  });
 
-  factory RoomSubscribeMsg({required int roomId}) = _RoomSubscribeMsgImpl;
+  factory RoomSubscribeMsg({
+    required int roomId,
+    required int playerId,
+  }) = _RoomSubscribeMsgImpl;
 
   factory RoomSubscribeMsg.fromJson(Map<String, dynamic> jsonSerialization) {
-    return RoomSubscribeMsg(roomId: jsonSerialization['roomId'] as int);
+    return RoomSubscribeMsg(
+      roomId: jsonSerialization['roomId'] as int,
+      playerId: jsonSerialization['playerId'] as int,
+    );
   }
 
   int roomId;
 
+  int playerId;
+
   /// Returns a shallow copy of this [RoomSubscribeMsg]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
-  RoomSubscribeMsg copyWith({int? roomId});
+  RoomSubscribeMsg copyWith({
+    int? roomId,
+    int? playerId,
+  });
   @override
   Map<String, dynamic> toJson() {
     return {
       '__className__': 'RoomSubscribeMsg',
       'roomId': roomId,
+      'playerId': playerId,
     };
   }
 
@@ -41,6 +56,7 @@ abstract class RoomSubscribeMsg
     return {
       '__className__': 'RoomSubscribeMsg',
       'roomId': roomId,
+      'playerId': playerId,
     };
   }
 
@@ -51,13 +67,25 @@ abstract class RoomSubscribeMsg
 }
 
 class _RoomSubscribeMsgImpl extends RoomSubscribeMsg {
-  _RoomSubscribeMsgImpl({required int roomId}) : super._(roomId: roomId);
+  _RoomSubscribeMsgImpl({
+    required int roomId,
+    required int playerId,
+  }) : super._(
+         roomId: roomId,
+         playerId: playerId,
+       );
 
   /// Returns a shallow copy of this [RoomSubscribeMsg]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
   @override
-  RoomSubscribeMsg copyWith({int? roomId}) {
-    return RoomSubscribeMsg(roomId: roomId ?? this.roomId);
+  RoomSubscribeMsg copyWith({
+    int? roomId,
+    int? playerId,
+  }) {
+    return RoomSubscribeMsg(
+      roomId: roomId ?? this.roomId,
+      playerId: playerId ?? this.playerId,
+    );
   }
 }
