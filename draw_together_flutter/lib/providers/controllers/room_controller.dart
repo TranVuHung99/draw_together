@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/serverpod_client.dart';
 import '../game_providers.dart';
@@ -34,7 +35,7 @@ class RoomController {
         }
       }
     } catch (e) {
-      print('Error creating room: \$e');
+      debugPrint('Error creating room: $e');
       return false;
     }
     return true;
@@ -54,7 +55,7 @@ class RoomController {
         }
       }
     } catch (e) {
-      print('Error joining room: \$e');
+      debugPrint('Error joining room: $e');
     }
     return false;
   }

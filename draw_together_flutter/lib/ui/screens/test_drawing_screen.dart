@@ -1,4 +1,5 @@
 import 'package:draw_together_flutter/ui/widgets/drawing_board.dart';
+import 'package:draw_together_flutter/ui/widgets/drawing_toolbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,10 +40,11 @@ class _TestDrawingScreenState extends ConsumerState<TestDrawingScreen> {
               roomId: 1,
               name: 'Tester',
               colorInfo: '0xFFFF0000',
+              // The whole canvas, in normalized coordinates.
               regionX: 0,
               regionY: 0,
-              regionWidth: 800,
-              regionHeight: 600,
+              regionWidth: 1,
+              regionHeight: 1,
             ),
           );
     });
@@ -63,14 +65,14 @@ class _TestDrawingScreenState extends ConsumerState<TestDrawingScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: AspectRatio(
-          aspectRatio: 800 / 600,
-          child: Container(
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
-            child: ClipRect(child: const DrawingBoard()),
+      // The board letterboxes its own viewport, so it just needs the space.
+      body: const Column(
+        children: [
+          DrawingToolbar(),
+          Expanded(
+            child: Padding(padding: EdgeInsets.all(8), child: DrawingBoard()),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -4,10 +4,12 @@ import 'package:draw_together_serverpod_client/draw_together_serverpod_client.da
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
+import '../../models/canvas_viewport.dart';
 import '../../providers/game_providers.dart';
 import '../../providers/controllers/websocket_service.dart';
 import '../widgets/drawing_board.dart';
 import '../widgets/drawing_painter.dart';
+import '../widgets/drawing_toolbar.dart';
 import 'final_result_screen.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
@@ -25,6 +27,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   void initState() {
     super.initState();
     _startTimer();
+    // Drawing players start in draw mode, whatever a previous round left behind.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(viewGlobalCanvasProvider.notifier).set(false);
+    });
   }
 
   void _startTimer() {
@@ -71,15 +78,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final canvas = Canvas(recorder);
     final size = Size(room.canvasWidth, room.canvasHeight);
 
-    // Draw background
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = Colors.white,
+    // The export viewport is the whole canvas at the room's pixel resolution,
+    // which is the only thing canvasWidth/canvasHeight still decide.
+    final viewport = CanvasViewport(
+      viewport: CanvasViewport.fullCanvas,
+      destination: Rect.fromLTWH(0, 0, size.width, size.height),
     );
 
-    // Re-use the DrawingPainter
-    final painter = DrawingPainter(strokes: strokes);
-    painter.paint(canvas, size);
+    // Re-use the DrawingPainter, which paints the background too
+    DrawingPainter(strokes: strokes, viewport: viewport).paint(canvas, size);
 
     final picture = recorder.endRecording();
     final uiImage = await picture.toImage(
@@ -97,7 +104,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           .sendMessage(
             FinalCanvasMsg(roomId: room.id!, base64Image: base64String),
           );
-      // Wait, our sendStroke expects StrokeSyncMsg. Let's add a proper send call if we can.
     }
   }
 
@@ -105,6 +111,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   Widget build(BuildContext context) {
     final room = ref.watch(roomProvider);
     final player = ref.watch(currentPlayerProvider);
+    final canDraw = ref.watch(canDrawProvider);
+    final spectating = ref.watch(viewGlobalCanvasProvider);
+    // A player with a region draws and so has two modes to switch between; the
+    // host has only the full-canvas observer view.
+    final canSwitchMode = ref.watch(localRegionProvider) != null;
 
     // Listen for the final image to navigate
     ref.listen(finalImageBase64Provider, (previous, next) {
@@ -127,43 +138,25 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       appBar: AppBar(
         title: Text('Draw Together - $timeStr'),
         automaticallyImplyLeading: false,
+        actions: [
+          if (canSwitchMode)
+            IconButton(
+              icon: Icon(spectating ? Icons.brush : Icons.grid_view),
+              tooltip: spectating ? 'Back to my region' : 'View whole canvas',
+              onPressed: () =>
+                  ref.read(viewGlobalCanvasProvider.notifier).toggle(),
+            ),
+        ],
       ),
-      body: Center(
-        child: AspectRatio(
-          aspectRatio: room.canvasWidth / room.canvasHeight,
-          child: Stack(
-            children: [
-              // Show the entire canvas (other people's strokes)
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                ),
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: DrawingPainter(strokes: ref.watch(strokesProvider)),
-                ),
-              ),
-              // Overlay the player's active drawing bounding box
-              Positioned(
-                left: player.regionX,
-                top: player.regionY,
-                width: player.regionWidth,
-                height: player.regionHeight,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.blueAccent, width: 2),
-                  ),
-                  child: ClipRect(
-                    child: Transform.translate(
-                      offset: Offset(-player.regionX, -player.regionY),
-                      child: const DrawingBoard(),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      body: Column(
+        children: [
+          // The toolbar is a sibling of the canvas and goes away whenever input
+          // is not accepted.
+          if (canDraw) const DrawingToolbar(),
+          const Expanded(
+            child: Padding(padding: EdgeInsets.all(8.0), child: DrawingBoard()),
           ),
-        ),
+        ],
       ),
     );
   }

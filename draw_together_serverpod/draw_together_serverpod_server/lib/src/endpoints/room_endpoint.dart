@@ -26,15 +26,12 @@ class RoomEndpoint extends Endpoint {
     room = await Room.db.insertRow(session, room);
     if (room.id == null) return null;
 
-    // Create the host player
+    // Create the host player. The host observes and controls the session and
+    // never draws, so its region fields stay null for the room's whole life.
     var hostPlayer = Player(
       roomId: room.id!,
       name: hostName,
       colorInfo: '0xFFFF0000', // Default red
-      regionX: 0,
-      regionY: 0,
-      regionWidth: canvasWidth, // Temporarily full
-      regionHeight: canvasHeight,
     );
 
     hostPlayer = await Player.db.insertRow(session, hostPlayer);
@@ -106,22 +103,28 @@ class RoomEndpoint extends Endpoint {
       orderBy: (p) => p.id,
     );
 
-    if (players.isEmpty) return false;
+    // The host observes rather than draws, so it is not given a region.
+    final drawers = players.where((p) => p.id != room.hostId).toList();
+    if (drawers.isEmpty) return false;
 
     // -- Canvas Partitioning Algorithm --
-    int n = players.length;
+    // Regions are normalized fractions of the canvas, so the grid is laid out
+    // over the unit square and does not depend on canvasWidth/canvasHeight.
+    int n = drawers.length;
     // Simple heuristic: find a grid near sqrt(n)
     int cols = sqrt(n).ceil();
     int rows = (n / cols).ceil();
 
-    double colWidth = room.canvasWidth / cols;
-    double rowHeight = room.canvasHeight / rows;
+    double colWidth = 1.0 / cols;
+    double rowHeight = 1.0 / rows;
 
+    // `drawers` preserves the ascending-id order of the query, which makes the
+    // assignment deterministic.
     for (int i = 0; i < n; i++) {
       int r = i ~/ cols;
       int c = i % cols;
 
-      var p = players[i];
+      var p = drawers[i];
       p = p.copyWith(
         regionX: c * colWidth,
         regionY: r * rowHeight,
