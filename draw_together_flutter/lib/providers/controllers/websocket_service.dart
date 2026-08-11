@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/serverpod_client.dart';
 import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart';
@@ -19,7 +20,7 @@ class WebSocketService {
 
   WebSocketService(this.ref);
 
-  Future<void> connect(int roomId) async {
+  Future<void> connect(int roomId, int playerId) async {
     if (!_isListening) {
       // Initialize the bidirectional stream
       final incomingStream = client.gameStreaming.live(
@@ -31,8 +32,11 @@ class WebSocketService {
       _isListening = true;
     }
 
-    // Subscribe to the specific room's channel
-    _outgoingController.add(RoomSubscribeMsg(roomId: roomId));
+    // Subscribe to the specific room's channel. The playerId lets the server
+    // keep this client's own strokes from being echoed back to it.
+    _outgoingController.add(
+      RoomSubscribeMsg(roomId: roomId, playerId: playerId),
+    );
   }
 
   void _handleIncomingMessage(SerializableModel message) {
@@ -54,6 +58,11 @@ class WebSocketService {
               .set(
                 room.copyWith(status: message.status, endTime: message.endTime),
               );
+          if (message.status == 'PLAYING') {
+            // Regions are assigned as the game starts, so the local player and
+            // the roster are both stale from this moment.
+            _refreshPlayers(message.roomId);
+          }
         }
       }
     } else if (message is FinalCanvasMsg) {
@@ -76,8 +85,19 @@ class WebSocketService {
     try {
       final players = await client.room.getPlayersInRoom(roomId);
       ref.read(playersProvider.notifier).set(players);
+
+      // Keep the local player in step with the roster, so its region is not
+      // read from a stale copy.
+      final current = ref.read(currentPlayerProvider);
+      if (current != null) {
+        final updated = players.firstWhere(
+          (p) => p.id == current.id,
+          orElse: () => current,
+        );
+        ref.read(currentPlayerProvider.notifier).set(updated);
+      }
     } catch (e) {
-      print('Error fetching players: $e');
+      debugPrint('Error fetching players: $e');
     }
   }
 

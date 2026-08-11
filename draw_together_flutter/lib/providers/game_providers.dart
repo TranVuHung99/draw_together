@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart';
+import '../models/canvas_viewport.dart';
 import '../models/stroke.dart';
 
 // Provides the current active room
@@ -34,7 +35,12 @@ final currentPlayerProvider = NotifierProvider<CurrentPlayerNotifier, Player?>(
   CurrentPlayerNotifier.new,
 );
 
-// Provides the current game view mode (true = global canvas, false = local region)
+/// A drawing player's view mode: `false` is draw mode, which shows only their
+/// own region and takes input; `true` is spectate mode, which shows the whole
+/// live canvas read-only. Draw mode is the default on entering the game.
+///
+/// The host has no mode switch — with no region, every derivation below falls
+/// through to the full canvas anyway.
 class ViewGlobalCanvasNotifier extends Notifier<bool> {
   @override
   bool build() => false;
@@ -46,6 +52,48 @@ final viewGlobalCanvasProvider =
     NotifierProvider<ViewGlobalCanvasNotifier, bool>(
       ViewGlobalCanvasNotifier.new,
     );
+
+/// A player's assigned region in normalized canvas space, or null when they do
+/// not draw (the host) or the game has not started yet.
+Rect? regionOf(Player? player) {
+  final x = player?.regionX;
+  final y = player?.regionY;
+  final width = player?.regionWidth;
+  final height = player?.regionHeight;
+  if (x == null || y == null || width == null || height == null) return null;
+  return Rect.fromLTWH(x, y, width, height);
+}
+
+/// Whether the local player is the host of the current room.
+final isHostProvider = Provider<bool>((ref) {
+  final room = ref.watch(roomProvider);
+  final player = ref.watch(currentPlayerProvider);
+  return room != null && player != null && room.hostId == player.id;
+});
+
+/// The local player's own region, read once here rather than by checking the
+/// four nullable fields at each use.
+final localRegionProvider = Provider<Rect?>(
+  (ref) => regionOf(ref.watch(currentPlayerProvider)),
+);
+
+/// The normalized rect the local view shows.
+final viewportRectProvider = Provider<Rect>((ref) {
+  final region = ref.watch(localRegionProvider);
+  final spectating = ref.watch(viewGlobalCanvasProvider);
+  if (spectating || region == null) return CanvasViewport.fullCanvas;
+  return region;
+});
+
+/// Whether drawing input is accepted. All three conditions fail independently:
+/// the host never has a region, a spectating player is not in draw mode, and
+/// everyone fails the status check before the game starts and after it ends.
+final canDrawProvider = Provider<bool>((ref) {
+  final inDrawMode = !ref.watch(viewGlobalCanvasProvider);
+  final hasRegion = ref.watch(localRegionProvider) != null;
+  final isPlaying = ref.watch(roomProvider)?.status == 'PLAYING';
+  return inDrawMode && hasRegion && isPlaying;
+});
 
 // Provides the list of all strokes
 class StrokesNotifier extends Notifier<List<Stroke>> {
@@ -62,17 +110,14 @@ class StrokesNotifier extends Notifier<List<Stroke>> {
         ..style = PaintingStyle.stroke
         ..blendMode = msg.isEraser ? BlendMode.clear : BlendMode.srcOver;
 
-      final path = Path();
-      if (msg.points.length >= 2) {
-        path.moveTo(msg.points[0], msg.points[1]);
-      }
-
       state = [
         ...state,
         Stroke(
           id: msg.strokeId,
           playerId: msg.playerId,
-          path: path,
+          // Points arrive already normalized; they are mapped to widget space
+          // at paint time.
+          points: offsetsFromFlat(msg.points),
           paint: paint,
           isEraser: msg.isEraser,
         ),
@@ -82,12 +127,7 @@ class StrokesNotifier extends Notifier<List<Stroke>> {
       final strokeIndex = state.indexWhere((s) => s.id == msg.strokeId);
       if (strokeIndex == -1) return;
 
-      final stroke = state[strokeIndex];
-      for (int i = 0; i < msg.points.length; i += 2) {
-        if (i + 1 < msg.points.length) {
-          stroke.path.lineTo(msg.points[i], msg.points[i + 1]);
-        }
-      }
+      state[strokeIndex].addAll(offsetsFromFlat(msg.points));
 
       // We trigger a state update by re-assigning the list so listeners rebuild
       state = [...state];

@@ -18,10 +18,10 @@ abstract class Player implements _i1.SerializableModel {
     required this.roomId,
     required this.name,
     this.colorInfo,
-    required this.regionX,
-    required this.regionY,
-    required this.regionWidth,
-    required this.regionHeight,
+    this.regionX,
+    this.regionY,
+    this.regionWidth,
+    this.regionHeight,
   });
 
   factory Player({
@@ -29,10 +29,10 @@ abstract class Player implements _i1.SerializableModel {
     required int roomId,
     required String name,
     String? colorInfo,
-    required double regionX,
-    required double regionY,
-    required double regionWidth,
-    required double regionHeight,
+    double? regionX,
+    double? regionY,
+    double? regionWidth,
+    double? regionHeight,
   }) = _PlayerImpl;
 
   factory Player.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -41,10 +41,10 @@ abstract class Player implements _i1.SerializableModel {
       roomId: jsonSerialization['roomId'] as int,
       name: jsonSerialization['name'] as String,
       colorInfo: jsonSerialization['colorInfo'] as String?,
-      regionX: (jsonSerialization['regionX'] as num).toDouble(),
-      regionY: (jsonSerialization['regionY'] as num).toDouble(),
-      regionWidth: (jsonSerialization['regionWidth'] as num).toDouble(),
-      regionHeight: (jsonSerialization['regionHeight'] as num).toDouble(),
+      regionX: (jsonSerialization['regionX'] as num?)?.toDouble(),
+      regionY: (jsonSerialization['regionY'] as num?)?.toDouble(),
+      regionWidth: (jsonSerialization['regionWidth'] as num?)?.toDouble(),
+      regionHeight: (jsonSerialization['regionHeight'] as num?)?.toDouble(),
     );
   }
 
@@ -59,13 +59,13 @@ abstract class Player implements _i1.SerializableModel {
 
   String? colorInfo;
 
-  double regionX;
+  double? regionX;
 
-  double regionY;
+  double? regionY;
 
-  double regionWidth;
+  double? regionWidth;
 
-  double regionHeight;
+  double? regionHeight;
 
   /// Returns a shallow copy of this [Player]
   /// with some or all fields replaced by the given arguments.
@@ -88,10 +88,10 @@ abstract class Player implements _i1.SerializableModel {
       'roomId': roomId,
       'name': name,
       if (colorInfo != null) 'colorInfo': colorInfo,
-      'regionX': regionX,
-      'regionY': regionY,
-      'regionWidth': regionWidth,
-      'regionHeight': regionHeight,
+      if (regionX != null) 'regionX': regionX,
+      if (regionY != null) 'regionY': regionY,
+      if (regionWidth != null) 'regionWidth': regionWidth,
+      if (regionHeight != null) 'regionHeight': regionHeight,
     };
   }
 
@@ -109,10 +109,10 @@ class _PlayerImpl extends Player {
     required int roomId,
     required String name,
     String? colorInfo,
-    required double regionX,
-    required double regionY,
-    required double regionWidth,
-    required double regionHeight,
+    double? regionX,
+    double? regionY,
+    double? regionWidth,
+    double? regionHeight,
   }) : super._(
          id: id,
          roomId: roomId,
@@ -133,20 +133,20 @@ class _PlayerImpl extends Player {
     int? roomId,
     String? name,
     Object? colorInfo = _Undefined,
-    double? regionX,
-    double? regionY,
-    double? regionWidth,
-    double? regionHeight,
+    Object? regionX = _Undefined,
+    Object? regionY = _Undefined,
+    Object? regionWidth = _Undefined,
+    Object? regionHeight = _Undefined,
   }) {
     return Player(
       id: id is int? ? id : this.id,
       roomId: roomId ?? this.roomId,
       name: name ?? this.name,
       colorInfo: colorInfo is String? ? colorInfo : this.colorInfo,
-      regionX: regionX ?? this.regionX,
-      regionY: regionY ?? this.regionY,
-      regionWidth: regionWidth ?? this.regionWidth,
-      regionHeight: regionHeight ?? this.regionHeight,
+      regionX: regionX is double? ? regionX : this.regionX,
+      regionY: regionY is double? ? regionY : this.regionY,
+      regionWidth: regionWidth is double? ? regionWidth : this.regionWidth,
+      regionHeight: regionHeight is double? ? regionHeight : this.regionHeight,
     );
   }
 }

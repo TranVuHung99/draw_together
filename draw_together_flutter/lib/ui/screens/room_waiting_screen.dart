@@ -21,8 +21,9 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
 
   void _connectToRoom() async {
     final room = ref.read(roomProvider);
-    if (room != null) {
-      await ref.read(webSocketServiceProvider).connect(room.id!);
+    final player = ref.read(currentPlayerProvider);
+    if (room != null && player != null) {
+      await ref.read(webSocketServiceProvider).connect(room.id!, player.id!);
       // Refresh players upon joining
       final players = await client.room.getPlayersInRoom(room.id!);
       ref.read(playersProvider.notifier).set(players);
@@ -76,6 +77,7 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
                 itemBuilder: (context, index) {
                   final p = players[index];
                   final isMe = p.id == currentPlayer.id;
+                  final isRoomHost = p.id == room.hostId;
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: Color(
@@ -85,7 +87,12 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
                     title: Text(
                       p.name +
                           (isMe ? ' (You)' : '') +
-                          (p.id == room.hostId ? ' - Host' : ''),
+                          (isRoomHost ? ' - Host' : ''),
+                    ),
+                    // The host observes and controls the session; only the
+                    // other players are given a region to draw in.
+                    subtitle: Text(
+                      isRoomHost ? 'Observing - does not draw' : 'Drawing',
                     ),
                   );
                 },
@@ -95,7 +102,11 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
               Padding(
                 padding: const EdgeInsets.all(32.0),
                 child: ElevatedButton(
-                  onPressed: players.isNotEmpty ? _startGame : null,
+                  // The game needs at least one drawing player, and the host is
+                  // not one of them.
+                  onPressed: players.any((p) => p.id != room.hostId)
+                      ? _startGame
+                      : null,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 48,

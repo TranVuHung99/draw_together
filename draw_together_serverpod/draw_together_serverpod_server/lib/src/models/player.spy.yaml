@@ -4,7 +4,10 @@ fields:
   roomId: int
   name: String
   colorInfo: String?
-  regionX: double
-  regionY: double
-  regionWidth: double
-  regionHeight: double
+  # Assigned drawing region as fractions of the full canvas, in the range 0.0-1.0
+  # where (0.0, 0.0) is the canvas top-left and (1.0, 1.0) the bottom-right.
+  # Null means this player does not draw (the host), or the game has not started yet.
+  regionX: double?
+  regionY: double?
+  regionWidth: double?
+  regionHeight: double?
