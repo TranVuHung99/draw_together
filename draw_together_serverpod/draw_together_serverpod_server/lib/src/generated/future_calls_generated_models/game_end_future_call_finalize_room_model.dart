@@ -12,52 +12,38 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:serverpod/serverpod.dart' as _i1;
 
-abstract class FinalCanvasMsg
+abstract class GameEndFutureCallFinalizeRoomModel
     implements _i1.SerializableModel, _i1.ProtocolSerialization {
-  FinalCanvasMsg._({
-    required this.roomId,
-    required this.svg,
-  });
+  GameEndFutureCallFinalizeRoomModel._({required this.roomId});
 
-  factory FinalCanvasMsg({
-    required int roomId,
-    required String svg,
-  }) = _FinalCanvasMsgImpl;
+  factory GameEndFutureCallFinalizeRoomModel({required int roomId}) =
+      _GameEndFutureCallFinalizeRoomModelImpl;
 
-  factory FinalCanvasMsg.fromJson(Map<String, dynamic> jsonSerialization) {
-    return FinalCanvasMsg(
+  factory GameEndFutureCallFinalizeRoomModel.fromJson(
+    Map<String, dynamic> jsonSerialization,
+  ) {
+    return GameEndFutureCallFinalizeRoomModel(
       roomId: jsonSerialization['roomId'] as int,
-      svg: jsonSerialization['svg'] as String,
     );
   }
 
   int roomId;
 
-  String svg;
-
-  /// Returns a shallow copy of this [FinalCanvasMsg]
+  /// Returns a shallow copy of this [GameEndFutureCallFinalizeRoomModel]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
-  FinalCanvasMsg copyWith({
-    int? roomId,
-    String? svg,
-  });
+  GameEndFutureCallFinalizeRoomModel copyWith({int? roomId});
   @override
   Map<String, dynamic> toJson() {
     return {
-      '__className__': 'FinalCanvasMsg',
+      '__className__': 'GameEndFutureCallFinalizeRoomModel',
       'roomId': roomId,
-      'svg': svg,
     };
   }
 
   @override
   Map<String, dynamic> toJsonForProtocol() {
-    return {
-      '__className__': 'FinalCanvasMsg',
-      'roomId': roomId,
-      'svg': svg,
-    };
+    return {};
   }
 
   @override
@@ -66,26 +52,16 @@ abstract class FinalCanvasMsg
   }
 }
 
-class _FinalCanvasMsgImpl extends FinalCanvasMsg {
-  _FinalCanvasMsgImpl({
-    required int roomId,
-    required String svg,
-  }) : super._(
-         roomId: roomId,
-         svg: svg,
-       );
+class _GameEndFutureCallFinalizeRoomModelImpl
+    extends GameEndFutureCallFinalizeRoomModel {
+  _GameEndFutureCallFinalizeRoomModelImpl({required int roomId})
+    : super._(roomId: roomId);
 
-  /// Returns a shallow copy of this [FinalCanvasMsg]
+  /// Returns a shallow copy of this [GameEndFutureCallFinalizeRoomModel]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
   @override
-  FinalCanvasMsg copyWith({
-    int? roomId,
-    String? svg,
-  }) {
-    return FinalCanvasMsg(
-      roomId: roomId ?? this.roomId,
-      svg: svg ?? this.svg,
-    );
+  GameEndFutureCallFinalizeRoomModel copyWith({int? roomId}) {
+    return GameEndFutureCallFinalizeRoomModel(roomId: roomId ?? this.roomId);
   }
 }

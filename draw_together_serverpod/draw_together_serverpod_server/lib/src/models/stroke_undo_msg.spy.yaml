@@ -1,0 +1,7 @@
+class: StrokeUndoMsg
+fields:
+  roomId: int
+  # The player retracting the stroke. Ownership is verified against the
+  # persisted row, never against this field.
+  playerId: int
+  strokeId: String

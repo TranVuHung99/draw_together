@@ -1,20 +1,37 @@
 import 'package:flutter/material.dart';
 import '../../models/canvas_viewport.dart';
 import '../../models/stroke.dart';
+import '../../models/stroke_board.dart';
 
-/// Paints every stroke through a single viewport.
+/// Composes the canvas as one layer per drawing player and maps the result
+/// through the viewport.
 ///
-/// Strokes are stored in normalized canvas coordinates, so this is the one
-/// place that turns them into widget pixels. Anything outside the viewport is
-/// clipped away, which is what keeps other players' work off a draw-mode view.
+/// The composition happens in normalized canvas space: the viewport transform
+/// is applied to the canvas first, and everything below is drawn in canvas
+/// coordinates. Doing it the other way round would clip a draw-mode view
+/// against a magnified region and compute the eraser mask at a different
+/// resolution in each view; this way draw mode and the full-canvas views are
+/// the same composed image at different magnifications.
+///
+/// Each player's strokes go into their own layer, clipped to their region, so
+/// an eraser clears only its owner's work. The layers are composited in
+/// ascending player id order. The host owns no region and no strokes, and so
+/// contributes no layer.
 class DrawingPainter extends CustomPainter {
-  final List<Stroke> strokes;
+  final StrokeBoard board;
+
+  /// The region of each drawing player, in normalized canvas coordinates.
+  final Map<int, Rect> regions;
+
+  /// The local player's stroke in progress, painted into their own layer.
   final Stroke? currentStroke;
+
   final CanvasViewport viewport;
   final Color background;
 
   DrawingPainter({
-    required this.strokes,
+    required this.board,
+    required this.regions,
     required this.viewport,
     this.currentStroke,
     this.background = Colors.white,
@@ -27,31 +44,55 @@ class DrawingPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(destination);
 
-    // The background sits outside the layer below, so an eraser clears strokes
+    // The background sits outside every layer, so an eraser clears strokes
     // down to it rather than punching a hole through it.
     canvas.drawRect(destination, Paint()..color = background);
 
-    // Save the layer so BlendMode.clear works properly for erasing
-    canvas.saveLayer(destination, Paint());
+    // From here on the canvas is in normalized coordinates.
+    canvas.translate(destination.left, destination.top);
+    canvas.scale(viewport.scaleX, viewport.scaleY);
+    canvas.translate(-viewport.viewport.left, -viewport.viewport.top);
 
-    for (final stroke in strokes) {
-      canvas.drawPath(stroke.toPath(viewport), stroke.paint);
-    }
+    for (final playerId in _layerOwners()) {
+      final strokes = board.strokesOf(playerId);
+      final active = currentStroke?.playerId == playerId ? currentStroke : null;
+      if (strokes.isEmpty && active == null) continue;
 
-    final active = currentStroke;
-    if (active != null) {
-      canvas.drawPath(active.toPath(viewport), active.paint);
+      // A stroke owner always has a region; falling back to the whole canvas
+      // covers only the moment before a stale roster catches up, and keeps the
+      // eraser inside a layer even then.
+      final region = regions[playerId] ?? CanvasViewport.fullCanvas;
+
+      canvas.saveLayer(region, Paint());
+      canvas.clipRect(region);
+      // Strokes are held in the order they were completed, which is the
+      // server's sequence order.
+      for (final stroke in strokes) {
+        canvas.drawPath(stroke.toPath(), stroke.paint);
+      }
+      if (active != null) {
+        canvas.drawPath(active.toPath(), active.paint);
+      }
+      canvas.restore();
     }
 
     canvas.restore();
-    canvas.restore();
+  }
+
+  /// Every player with something to draw, in composition order.
+  List<int> _layerOwners() {
+    final owners = {...regions.keys, ...board.byPlayer.keys};
+    final active = currentStroke?.playerId;
+    if (active != null) owners.add(active);
+    return owners.toList()..sort();
   }
 
   @override
   bool shouldRepaint(covariant DrawingPainter oldDelegate) {
     return oldDelegate.viewport != viewport ||
         oldDelegate.background != background ||
-        !identical(oldDelegate.strokes, strokes) ||
+        !identical(oldDelegate.board, board) ||
+        !identical(oldDelegate.regions, regions) ||
         !identical(oldDelegate.currentStroke, currentStroke) ||
         // The stroke in progress is mutated in place, so its identity alone
         // does not tell us whether it grew.

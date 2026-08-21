@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart'
+    hide Stroke;
+import '../../providers/game_providers.dart';
+import '../../providers/controllers/websocket_service.dart';
 import '../../providers/tool_providers.dart';
 
 /// Tool controls for the canvas.
 ///
 /// A sibling of the canvas rather than a child of it, so it can be left out
-/// entirely when drawing input is not accepted.
+/// entirely when drawing input is not accepted. Undo lives here for the same
+/// reason: it is a drawing action, and a read-only view offers none.
 class DrawingToolbar extends ConsumerWidget {
   const DrawingToolbar({super.key});
 
@@ -13,6 +18,8 @@ class DrawingToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tool = ref.watch(drawingToolProvider);
     final notifier = ref.read(drawingToolProvider.notifier);
+    final undoable = ref.watch(undoableStrokeProvider);
+    final drawing = ref.watch(strokeInProgressProvider);
 
     return Container(
       color: Colors.grey[200],
@@ -20,6 +27,15 @@ class DrawingToolbar extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          IconButton(
+            icon: const Icon(Icons.undo),
+            // Disabled mid-drag rather than reasoning about which stroke an
+            // undo would land on, and disabled when there is nothing to undo.
+            onPressed: (undoable == null || drawing)
+                ? null
+                : () => _undo(ref, undoable.id, undoable.playerId),
+            tooltip: 'Undo my last stroke',
+          ),
           IconButton(
             icon: Icon(
               Icons.edit,
@@ -69,5 +85,22 @@ class DrawingToolbar extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Asks the server to retract a stroke. Nothing is removed here — the canvas
+  /// changes when the server confirms, so what a player sees is what the
+  /// server actually deleted.
+  void _undo(WidgetRef ref, String strokeId, int playerId) {
+    final roomId = ref.read(roomProvider)?.id;
+    if (roomId == null) return;
+    ref
+        .read(webSocketServiceProvider)
+        .sendMessage(
+          StrokeUndoMsg(
+            roomId: roomId,
+            playerId: playerId,
+            strokeId: strokeId,
+          ),
+        );
   }
 }

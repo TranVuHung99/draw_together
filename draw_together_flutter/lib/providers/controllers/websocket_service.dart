@@ -14,8 +14,15 @@ final webSocketServiceProvider = Provider<WebSocketService>((ref) {
 class WebSocketService {
   final Ref ref;
   bool _isListening = false;
+  // Deliberately single-subscription, not a broadcast controller. The Serverpod
+  // client only attaches its listener after the websocket handshake and the
+  // open-stream round trip have both completed, which is well after `connect()`
+  // adds the first `RoomSubscribeMsg`. A broadcast controller drops events that
+  // arrive with no listener attached, which silently discarded the subscribe
+  // message and left the connection subscribed to no room at all. A
+  // single-subscription controller buffers until the client listens.
   final StreamController<SerializableModel> _outgoingController =
-      StreamController<SerializableModel>.broadcast();
+      StreamController<SerializableModel>();
   StreamSubscription? _incomingSubscription;
 
   WebSocketService(this.ref);
@@ -42,6 +49,10 @@ class WebSocketService {
   void _handleIncomingMessage(SerializableModel message) {
     if (message is StrokeSyncMsg) {
       ref.read(strokesProvider.notifier).handleStrokeSync(message);
+    } else if (message is StrokeUndoMsg) {
+      // The server confirms every undo, including the local player's own, so
+      // this is the only place a stroke is retracted.
+      ref.read(strokesProvider.notifier).handleUndo(message);
     } else if (message is GameStateChangeMsg) {
       // A change in room game state or new player joined
 
@@ -66,7 +77,7 @@ class WebSocketService {
         }
       }
     } else if (message is FinalCanvasMsg) {
-      ref.read(finalImageBase64Provider.notifier).set(message.base64Image);
+      ref.read(finalCanvasSvgProvider.notifier).set(message.svg);
       // Ensure local room state reflects finished
       final room = ref.read(roomProvider);
       if (room != null) {

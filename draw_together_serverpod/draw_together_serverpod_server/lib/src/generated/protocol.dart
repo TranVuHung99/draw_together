@@ -17,21 +17,27 @@ import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
     as _i4;
 import 'final_canvas_msg.dart' as _i5;
-import 'game_state_change_msg.dart' as _i6;
-import 'greetings/greeting.dart' as _i7;
-import 'player.dart' as _i8;
-import 'room.dart' as _i9;
-import 'room_subscribe_msg.dart' as _i10;
-import 'stroke_sync_msg.dart' as _i11;
+import 'future_calls_generated_models/game_end_future_call_finalize_room_model.dart'
+    as _i6;
+import 'game_state_change_msg.dart' as _i7;
+import 'greetings/greeting.dart' as _i8;
+import 'player.dart' as _i9;
+import 'room.dart' as _i10;
+import 'room_subscribe_msg.dart' as _i11;
+import 'stroke.dart' as _i12;
+import 'stroke_sync_msg.dart' as _i13;
+import 'stroke_undo_msg.dart' as _i14;
 import 'package:draw_together_serverpod_server/src/generated/player.dart'
-    as _i12;
+    as _i15;
 export 'final_canvas_msg.dart';
 export 'game_state_change_msg.dart';
 export 'greetings/greeting.dart';
 export 'player.dart';
 export 'room.dart';
 export 'room_subscribe_msg.dart';
+export 'stroke.dart';
 export 'stroke_sync_msg.dart';
+export 'stroke_undo_msg.dart';
 
 class Protocol extends _i1.SerializationManagerServer {
   Protocol._();
@@ -183,6 +189,109 @@ class Protocol extends _i1.SerializationManagerServer {
       ],
       managed: true,
     ),
+    _i2.TableDefinition(
+      name: 'stroke',
+      dartName: 'Stroke',
+      schema: 'public',
+      module: 'draw_together_serverpod',
+      columns: [
+        _i2.ColumnDefinition(
+          name: 'id',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int?',
+          columnDefault: 'nextval(\'stroke_id_seq\'::regclass)',
+        ),
+        _i2.ColumnDefinition(
+          name: 'roomId',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _i2.ColumnDefinition(
+          name: 'playerId',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _i2.ColumnDefinition(
+          name: 'strokeId',
+          columnType: _i2.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _i2.ColumnDefinition(
+          name: 'points',
+          columnType: _i2.ColumnType.json,
+          isNullable: false,
+          dartType: 'List<double>',
+        ),
+        _i2.ColumnDefinition(
+          name: 'colorInfo',
+          columnType: _i2.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _i2.ColumnDefinition(
+          name: 'strokeWidth',
+          columnType: _i2.ColumnType.doublePrecision,
+          isNullable: false,
+          dartType: 'double',
+        ),
+        _i2.ColumnDefinition(
+          name: 'isEraser',
+          columnType: _i2.ColumnType.boolean,
+          isNullable: false,
+          dartType: 'bool',
+        ),
+        _i2.ColumnDefinition(
+          name: 'sequence',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _i2.ColumnDefinition(
+          name: 'timestamp',
+          columnType: _i2.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+      ],
+      foreignKeys: [],
+      indexes: [
+        _i2.IndexDefinition(
+          indexName: 'stroke_pkey',
+          tableSpace: null,
+          elements: [
+            _i2.IndexElementDefinition(
+              type: _i2.IndexElementDefinitionType.column,
+              definition: 'id',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: true,
+        ),
+        _i2.IndexDefinition(
+          indexName: 'stroke_room_seq_idx',
+          tableSpace: null,
+          elements: [
+            _i2.IndexElementDefinition(
+              type: _i2.IndexElementDefinitionType.column,
+              definition: 'roomId',
+            ),
+            _i2.IndexElementDefinition(
+              type: _i2.IndexElementDefinitionType.column,
+              definition: 'sequence',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
     ..._i3.Protocol.targetTableDefinitions,
     ..._i4.Protocol.targetTableDefinitions,
     ..._i2.Protocol.targetTableDefinitions,
@@ -218,50 +327,71 @@ class Protocol extends _i1.SerializationManagerServer {
     if (t == _i5.FinalCanvasMsg) {
       return _i5.FinalCanvasMsg.fromJson(data) as T;
     }
-    if (t == _i6.GameStateChangeMsg) {
-      return _i6.GameStateChangeMsg.fromJson(data) as T;
+    if (t == _i6.GameEndFutureCallFinalizeRoomModel) {
+      return _i6.GameEndFutureCallFinalizeRoomModel.fromJson(data) as T;
     }
-    if (t == _i7.Greeting) {
-      return _i7.Greeting.fromJson(data) as T;
+    if (t == _i7.GameStateChangeMsg) {
+      return _i7.GameStateChangeMsg.fromJson(data) as T;
     }
-    if (t == _i8.Player) {
-      return _i8.Player.fromJson(data) as T;
+    if (t == _i8.Greeting) {
+      return _i8.Greeting.fromJson(data) as T;
     }
-    if (t == _i9.Room) {
-      return _i9.Room.fromJson(data) as T;
+    if (t == _i9.Player) {
+      return _i9.Player.fromJson(data) as T;
     }
-    if (t == _i10.RoomSubscribeMsg) {
-      return _i10.RoomSubscribeMsg.fromJson(data) as T;
+    if (t == _i10.Room) {
+      return _i10.Room.fromJson(data) as T;
     }
-    if (t == _i11.StrokeSyncMsg) {
-      return _i11.StrokeSyncMsg.fromJson(data) as T;
+    if (t == _i11.RoomSubscribeMsg) {
+      return _i11.RoomSubscribeMsg.fromJson(data) as T;
+    }
+    if (t == _i12.Stroke) {
+      return _i12.Stroke.fromJson(data) as T;
+    }
+    if (t == _i13.StrokeSyncMsg) {
+      return _i13.StrokeSyncMsg.fromJson(data) as T;
+    }
+    if (t == _i14.StrokeUndoMsg) {
+      return _i14.StrokeUndoMsg.fromJson(data) as T;
     }
     if (t == _i1.getType<_i5.FinalCanvasMsg?>()) {
       return (data != null ? _i5.FinalCanvasMsg.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i6.GameStateChangeMsg?>()) {
-      return (data != null ? _i6.GameStateChangeMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i6.GameEndFutureCallFinalizeRoomModel?>()) {
+      return (data != null
+              ? _i6.GameEndFutureCallFinalizeRoomModel.fromJson(data)
+              : null)
+          as T;
     }
-    if (t == _i1.getType<_i7.Greeting?>()) {
-      return (data != null ? _i7.Greeting.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i7.GameStateChangeMsg?>()) {
+      return (data != null ? _i7.GameStateChangeMsg.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i8.Player?>()) {
-      return (data != null ? _i8.Player.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i8.Greeting?>()) {
+      return (data != null ? _i8.Greeting.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i9.Room?>()) {
-      return (data != null ? _i9.Room.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i9.Player?>()) {
+      return (data != null ? _i9.Player.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i10.RoomSubscribeMsg?>()) {
-      return (data != null ? _i10.RoomSubscribeMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i10.Room?>()) {
+      return (data != null ? _i10.Room.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i11.StrokeSyncMsg?>()) {
-      return (data != null ? _i11.StrokeSyncMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i11.RoomSubscribeMsg?>()) {
+      return (data != null ? _i11.RoomSubscribeMsg.fromJson(data) : null) as T;
+    }
+    if (t == _i1.getType<_i12.Stroke?>()) {
+      return (data != null ? _i12.Stroke.fromJson(data) : null) as T;
+    }
+    if (t == _i1.getType<_i13.StrokeSyncMsg?>()) {
+      return (data != null ? _i13.StrokeSyncMsg.fromJson(data) : null) as T;
+    }
+    if (t == _i1.getType<_i14.StrokeUndoMsg?>()) {
+      return (data != null ? _i14.StrokeUndoMsg.fromJson(data) : null) as T;
     }
     if (t == List<double>) {
       return (data as List).map((e) => deserialize<double>(e)).toList() as T;
     }
-    if (t == List<_i12.Player>) {
-      return (data as List).map((e) => deserialize<_i12.Player>(e)).toList()
+    if (t == List<_i15.Player>) {
+      return (data as List).map((e) => deserialize<_i15.Player>(e)).toList()
           as T;
     }
     try {
@@ -279,12 +409,16 @@ class Protocol extends _i1.SerializationManagerServer {
   static String? getClassNameForType(Type type) {
     return switch (type) {
       _i5.FinalCanvasMsg => 'FinalCanvasMsg',
-      _i6.GameStateChangeMsg => 'GameStateChangeMsg',
-      _i7.Greeting => 'Greeting',
-      _i8.Player => 'Player',
-      _i9.Room => 'Room',
-      _i10.RoomSubscribeMsg => 'RoomSubscribeMsg',
-      _i11.StrokeSyncMsg => 'StrokeSyncMsg',
+      _i6.GameEndFutureCallFinalizeRoomModel =>
+        'GameEndFutureCallFinalizeRoomModel',
+      _i7.GameStateChangeMsg => 'GameStateChangeMsg',
+      _i8.Greeting => 'Greeting',
+      _i9.Player => 'Player',
+      _i10.Room => 'Room',
+      _i11.RoomSubscribeMsg => 'RoomSubscribeMsg',
+      _i12.Stroke => 'Stroke',
+      _i13.StrokeSyncMsg => 'StrokeSyncMsg',
+      _i14.StrokeUndoMsg => 'StrokeUndoMsg',
       _ => null,
     };
   }
@@ -304,18 +438,24 @@ class Protocol extends _i1.SerializationManagerServer {
     switch (data) {
       case _i5.FinalCanvasMsg():
         return 'FinalCanvasMsg';
-      case _i6.GameStateChangeMsg():
+      case _i6.GameEndFutureCallFinalizeRoomModel():
+        return 'GameEndFutureCallFinalizeRoomModel';
+      case _i7.GameStateChangeMsg():
         return 'GameStateChangeMsg';
-      case _i7.Greeting():
+      case _i8.Greeting():
         return 'Greeting';
-      case _i8.Player():
+      case _i9.Player():
         return 'Player';
-      case _i9.Room():
+      case _i10.Room():
         return 'Room';
-      case _i10.RoomSubscribeMsg():
+      case _i11.RoomSubscribeMsg():
         return 'RoomSubscribeMsg';
-      case _i11.StrokeSyncMsg():
+      case _i12.Stroke():
+        return 'Stroke';
+      case _i13.StrokeSyncMsg():
         return 'StrokeSyncMsg';
+      case _i14.StrokeUndoMsg():
+        return 'StrokeUndoMsg';
     }
     className = _i2.Protocol().getClassNameForObject(data);
     if (className != null) {
@@ -341,23 +481,32 @@ class Protocol extends _i1.SerializationManagerServer {
     if (dataClassName == 'FinalCanvasMsg') {
       return deserialize<_i5.FinalCanvasMsg>(data['data']);
     }
+    if (dataClassName == 'GameEndFutureCallFinalizeRoomModel') {
+      return deserialize<_i6.GameEndFutureCallFinalizeRoomModel>(data['data']);
+    }
     if (dataClassName == 'GameStateChangeMsg') {
-      return deserialize<_i6.GameStateChangeMsg>(data['data']);
+      return deserialize<_i7.GameStateChangeMsg>(data['data']);
     }
     if (dataClassName == 'Greeting') {
-      return deserialize<_i7.Greeting>(data['data']);
+      return deserialize<_i8.Greeting>(data['data']);
     }
     if (dataClassName == 'Player') {
-      return deserialize<_i8.Player>(data['data']);
+      return deserialize<_i9.Player>(data['data']);
     }
     if (dataClassName == 'Room') {
-      return deserialize<_i9.Room>(data['data']);
+      return deserialize<_i10.Room>(data['data']);
     }
     if (dataClassName == 'RoomSubscribeMsg') {
-      return deserialize<_i10.RoomSubscribeMsg>(data['data']);
+      return deserialize<_i11.RoomSubscribeMsg>(data['data']);
+    }
+    if (dataClassName == 'Stroke') {
+      return deserialize<_i12.Stroke>(data['data']);
     }
     if (dataClassName == 'StrokeSyncMsg') {
-      return deserialize<_i11.StrokeSyncMsg>(data['data']);
+      return deserialize<_i13.StrokeSyncMsg>(data['data']);
+    }
+    if (dataClassName == 'StrokeUndoMsg') {
+      return deserialize<_i14.StrokeUndoMsg>(data['data']);
     }
     if (dataClassName.startsWith('serverpod.')) {
       data['className'] = dataClassName.substring(10);
@@ -395,10 +544,12 @@ class Protocol extends _i1.SerializationManagerServer {
       }
     }
     switch (t) {
-      case _i8.Player:
-        return _i8.Player.t;
-      case _i9.Room:
-        return _i9.Room.t;
+      case _i9.Player:
+        return _i9.Player.t;
+      case _i10.Room:
+        return _i10.Room.t;
+      case _i12.Stroke:
+        return _i12.Stroke.t;
     }
     return null;
   }

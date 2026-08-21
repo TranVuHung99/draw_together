@@ -1,4 +1,5 @@
 import 'package:serverpod/serverpod.dart';
+import '../generated/future_calls.dart';
 import '../generated/protocol.dart';
 import 'dart:math';
 
@@ -49,6 +50,8 @@ class RoomEndpoint extends Endpoint {
     String roomCode,
     String playerName,
   ) async {
+    // The status is part of the lookup, so a room that is already PLAYING or
+    // FINISHED simply has no match: a game in progress cannot be joined.
     final roomInfo = await Room.db.findFirstRow(
       session,
       where: (r) => r.roomCode.equals(roomCode) & r.status.equals('WAITING'),
@@ -93,6 +96,8 @@ class RoomEndpoint extends Endpoint {
     int roomId,
     int durationSeconds,
   ) async {
+    // A room only ever moves WAITING -> PLAYING -> FINISHED, so starting a
+    // game that is already running or over is refused.
     final room = await Room.db.findById(session, roomId);
     if (room == null || room.status != 'WAITING') return false;
 
@@ -103,7 +108,8 @@ class RoomEndpoint extends Endpoint {
       orderBy: (p) => p.id,
     );
 
-    // The host observes rather than draws, so it is not given a region.
+    // The host observes rather than draws, so it is not given a region. With
+    // no one to draw there is no game to start.
     final drawers = players.where((p) => p.id != room.hostId).toList();
     if (drawers.isEmpty) return false;
 
@@ -139,27 +145,19 @@ class RoomEndpoint extends Endpoint {
     final updatedRoom = room.copyWith(status: 'PLAYING', endTime: endTime);
     await Room.db.updateRow(session, updatedRoom);
 
+    // The end of the game is the server's to decide. Client countdowns are
+    // presentational from here on: they never finalize anything.
+    await session.serverpod.futureCalls
+        .callAtTime(endTime.toUtc(), identifier: 'game_end_$roomId')
+        .gameEnd
+        .finalizeRoom(roomId);
+
     // Broadcast via pub-sub
     await session.messages.postMessage(
       'room_$roomId',
       GameStateChangeMsg(roomId: roomId, status: 'PLAYING', endTime: endTime),
     );
 
-    return true;
-  }
-
-  /// End the game explicitly (optional, usually client timer triggers finalize)
-  Future<bool> endGame(Session session, int roomId) async {
-    var room = await Room.db.findById(session, roomId);
-    if (room == null) return false;
-
-    room = room.copyWith(status: 'FINISHED');
-    await Room.db.updateRow(session, room);
-
-    await session.messages.postMessage(
-      'room_$roomId',
-      GameStateChangeMsg(roomId: roomId, status: 'FINISHED'),
-    );
     return true;
   }
 

@@ -21,6 +21,10 @@ import 'package:draw_together_serverpod_server/src/generated/player.dart'
     as _i6;
 import 'package:draw_together_serverpod_server/src/generated/greetings/greeting.dart'
     as _i7;
+import 'package:draw_together_serverpod_server/src/generated/future_calls_generated_models/game_end_future_call_finalize_room_model.dart'
+    as _i8;
+import 'package:draw_together_serverpod_server/src/generated/future_calls.dart'
+    as _i9;
 import 'package:draw_together_serverpod_server/src/generated/protocol.dart';
 import 'package:draw_together_serverpod_server/src/generated/endpoints.dart';
 export 'package:serverpod_test/serverpod_test_public_exports.dart';
@@ -128,6 +132,8 @@ void withServerpod(
 }
 
 class TestEndpoints {
+  late final futureCalls = _FutureCalls();
+
   late final _EmailIdpEndpoint emailIdp;
 
   late final _JwtRefreshEndpoint jwtRefresh;
@@ -167,6 +173,10 @@ class _InternalTestEndpoints extends TestEndpoints
       serializationManager,
     );
   }
+}
+
+class _FutureCalls {
+  late final gameEnd = _GameEndFutureCall();
 }
 
 class _EmailIdpEndpoint {
@@ -648,37 +658,6 @@ class _RoomEndpoint {
     });
   }
 
-  _i3.Future<bool> endGame(
-    _i1.TestSessionBuilder sessionBuilder,
-    int roomId,
-  ) async {
-    return _i1.callAwaitableFunctionAndHandleExceptions(() async {
-      var _localUniqueSession =
-          (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
-            endpoint: 'room',
-            method: 'endGame',
-          );
-      try {
-        var _localCallContext = await _endpointDispatch.getMethodCallContext(
-          createSessionCallback: (_) => _localUniqueSession,
-          endpointPath: 'room',
-          methodName: 'endGame',
-          parameters: _i1.testObjectToJson({'roomId': roomId}),
-          serializationManager: _serializationManager,
-        );
-        var _localReturnValue =
-            await (_localCallContext.method.call(
-                  _localUniqueSession,
-                  _localCallContext.arguments,
-                )
-                as _i3.Future<bool>);
-        return _localReturnValue;
-      } finally {
-        await _localUniqueSession.close();
-      }
-    });
-  }
-
   _i3.Future<_i6.Player?> getPlayer(
     _i1.TestSessionBuilder sessionBuilder,
     int playerId,
@@ -812,5 +791,24 @@ class _GreetingEndpoint {
         await _localUniqueSession.close();
       }
     });
+  }
+}
+
+class _GameEndFutureCall {
+  Future<void> finalizeRoom(
+    _i1.TestSessionBuilder sessionBuilder,
+    int roomId,
+  ) async {
+    var object = _i8.GameEndFutureCallFinalizeRoomModel(roomId: roomId);
+    var _localUniqueSession = (sessionBuilder as _i1.InternalTestSessionBuilder)
+        .internalBuild();
+    try {
+      await _i9.GameEndFinalizeRoomFutureCall().invoke(
+        _localUniqueSession,
+        object,
+      );
+    } finally {
+      await _localUniqueSession.close();
+    }
   }
 }

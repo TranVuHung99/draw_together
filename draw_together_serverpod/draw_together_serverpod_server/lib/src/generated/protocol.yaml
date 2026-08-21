@@ -15,7 +15,6 @@ room:
   - createRoom:
   - joinRoom:
   - startGame:
-  - endGame:
   - getPlayer:
   - getRoom:
   - getPlayersInRoom:

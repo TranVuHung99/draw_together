@@ -250,6 +250,12 @@ class EndpointGameStreaming extends _i2.EndpointRef {
   @override
   String get name => 'gameStreaming';
 
+  /// Bridges one client to its room's pub/sub channel.
+  ///
+  /// Incoming messages are republished to `room_<id>`; everything posted to
+  /// that channel is forwarded back out to this client, minus its own strokes.
+  /// Completed strokes are persisted, and replayed to a client as it
+  /// subscribes, so a reconnecting or late-joining client sees the full canvas.
   _i3.Stream<_i2.SerializableModel> live(
     _i3.Stream<_i2.SerializableModel> incomingStream,
   ) =>
@@ -310,13 +316,6 @@ class EndpointRoom extends _i2.EndpointRef {
       'roomId': roomId,
       'durationSeconds': durationSeconds,
     },
-  );
-
-  /// End the game explicitly (optional, usually client timer triggers finalize)
-  _i3.Future<bool> endGame(int roomId) => caller.callServerEndpoint<bool>(
-    'room',
-    'endGame',
-    {'roomId': roomId},
   );
 
   /// Get player by ID

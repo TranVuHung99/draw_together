@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math';
-import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart';
+// The generated `Stroke` is the server's table row; the canvas works with the
+// local painting model of the same name.
+import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart'
+    hide Stroke;
 import '../../models/canvas_viewport.dart';
 import '../../models/stroke.dart';
 import '../../providers/game_providers.dart';
@@ -33,6 +36,15 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
   /// The tool as it was when the active stroke began, so changing tools
   /// mid-stroke cannot alter what has already been drawn.
   DrawingTool _activeTool = const DrawingTool();
+
+  /// The active tool's width as a fraction of the canvas width.
+  ///
+  /// The slider is in pixels of the room's configured canvas, so the width
+  /// travels normalized alongside the points and means the same thing on every
+  /// screen, in the server's SVG, and in an export.
+  double _normalizedStrokeWidth(Room room) => room.canvasWidth <= 0
+      ? _activeTool.strokeWidth
+      : _activeTool.strokeWidth / room.canvasWidth;
 
   @override
   void initState() {
@@ -76,26 +88,21 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
     );
     _activeTool = ref.read(drawingToolProvider);
 
-    final paint = Paint()
-      ..color = _activeTool.color
-      ..strokeWidth = _activeTool.strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke
-      ..blendMode = _activeTool.isEraser ? BlendMode.clear : BlendMode.srcOver;
-
     setState(() {
       _activeStroke = Stroke(
         id: strokeId,
         playerId: player.id!,
         points: [point],
-        paint: paint,
+        color: _activeTool.color,
+        strokeWidth: _normalizedStrokeWidth(room),
         isEraser: _activeTool.isEraser,
       );
     });
+    // Undo is unavailable until this stroke is finished.
+    ref.read(strokeInProgressProvider.notifier).set(true);
 
     // Send the start message immediately
-    _send(room.id!, player.id!, strokeId, 'start', [point]);
+    _send(room, player.id!, strokeId, 'start', [point]);
     _batchPoints.clear();
 
     // Start batching timer for updates
@@ -103,7 +110,7 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
     _batchTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       final stroke = _activeStroke;
       if (_batchPoints.isNotEmpty && stroke != null) {
-        _send(room.id!, player.id!, stroke.id, 'update', _batchPoints);
+        _send(room, player.id!, stroke.id, 'update', _batchPoints);
         _batchPoints.clear();
       }
     });
@@ -128,7 +135,10 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
     _batchPoints.add(point);
   }
 
-  void _endStroke(DragEndDetails details) {
+  /// Finishes the stroke in progress. A cancelled drag ends the same way as a
+  /// released one, so a stroke other clients have already seen start is never
+  /// left open.
+  void _endStroke() {
     final room = ref.read(roomProvider);
     final player = ref.read(currentPlayerProvider);
     final stroke = _activeStroke;
@@ -136,11 +146,14 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
 
     _batchTimer?.cancel();
 
-    // Send the final end message
-    _send(room.id!, player.id!, stroke.id, 'end', _batchPoints);
+    // The end message carries the whole stroke, not just the unsent tail: it
+    // is what the server persists, and what it replays to a client that joins
+    // or reconnects later.
+    _send(room, player.id!, stroke.id, 'end', stroke.points);
 
-    // Save final local stroke
+    // Save final local stroke — the server does not echo it back.
     ref.read(strokesProvider.notifier).addStroke(stroke);
+    ref.read(strokeInProgressProvider.notifier).set(false);
 
     setState(() {
       _batchPoints.clear();
@@ -149,7 +162,7 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
   }
 
   void _send(
-    int roomId,
+    Room room,
     int playerId,
     String strokeId,
     String action,
@@ -159,14 +172,14 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
         .read(webSocketServiceProvider)
         .sendMessage(
           StrokeSyncMsg(
-            roomId: roomId,
+            roomId: room.id!,
             playerId: playerId,
             strokeId: strokeId,
             action: action,
             // Normalized canvas coordinates, clamped to the player's region.
             points: flatFromOffsets(points),
             colorInfo: _activeTool.colorInfo,
-            strokeWidth: _activeTool.strokeWidth,
+            strokeWidth: _normalizedStrokeWidth(room),
             isEraser: _activeTool.isEraser,
             timestamp: DateTime.now(),
           ),
@@ -175,7 +188,8 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
 
   @override
   Widget build(BuildContext context) {
-    final strokes = ref.watch(strokesProvider);
+    final board = ref.watch(strokesProvider);
+    final regions = ref.watch(playerRegionsProvider);
     final room = ref.watch(roomProvider);
     final canDraw = ref.watch(canDrawProvider);
     final viewportRect = ref.watch(viewportRectProvider);
@@ -200,7 +214,8 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
           CustomPaint(
             size: Size.infinite,
             painter: DrawingPainter(
-              strokes: strokes,
+              board: board,
+              regions: regions,
               currentStroke: _activeStroke,
               viewport: viewport,
             ),
@@ -239,7 +254,8 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
             behavior: HitTestBehavior.opaque,
             onPanStart: (details) => _startStroke(details, viewport),
             onPanUpdate: (details) => _updateStroke(details, viewport),
-            onPanEnd: _endStroke,
+            onPanEnd: (details) => _endStroke(),
+            onPanCancel: _endStroke,
             child: canvas,
           );
         }

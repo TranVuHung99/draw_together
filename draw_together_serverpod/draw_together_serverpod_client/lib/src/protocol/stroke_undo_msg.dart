@@ -12,41 +12,48 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:serverpod_client/serverpod_client.dart' as _i1;
 
-abstract class FinalCanvasMsg implements _i1.SerializableModel {
-  FinalCanvasMsg._({
+abstract class StrokeUndoMsg implements _i1.SerializableModel {
+  StrokeUndoMsg._({
     required this.roomId,
-    required this.svg,
+    required this.playerId,
+    required this.strokeId,
   });
 
-  factory FinalCanvasMsg({
+  factory StrokeUndoMsg({
     required int roomId,
-    required String svg,
-  }) = _FinalCanvasMsgImpl;
+    required int playerId,
+    required String strokeId,
+  }) = _StrokeUndoMsgImpl;
 
-  factory FinalCanvasMsg.fromJson(Map<String, dynamic> jsonSerialization) {
-    return FinalCanvasMsg(
+  factory StrokeUndoMsg.fromJson(Map<String, dynamic> jsonSerialization) {
+    return StrokeUndoMsg(
       roomId: jsonSerialization['roomId'] as int,
-      svg: jsonSerialization['svg'] as String,
+      playerId: jsonSerialization['playerId'] as int,
+      strokeId: jsonSerialization['strokeId'] as String,
     );
   }
 
   int roomId;
 
-  String svg;
+  int playerId;
 
-  /// Returns a shallow copy of this [FinalCanvasMsg]
+  String strokeId;
+
+  /// Returns a shallow copy of this [StrokeUndoMsg]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
-  FinalCanvasMsg copyWith({
+  StrokeUndoMsg copyWith({
     int? roomId,
-    String? svg,
+    int? playerId,
+    String? strokeId,
   });
   @override
   Map<String, dynamic> toJson() {
     return {
-      '__className__': 'FinalCanvasMsg',
+      '__className__': 'StrokeUndoMsg',
       'roomId': roomId,
-      'svg': svg,
+      'playerId': playerId,
+      'strokeId': strokeId,
     };
   }
 
@@ -56,26 +63,30 @@ abstract class FinalCanvasMsg implements _i1.SerializableModel {
   }
 }
 
-class _FinalCanvasMsgImpl extends FinalCanvasMsg {
-  _FinalCanvasMsgImpl({
+class _StrokeUndoMsgImpl extends StrokeUndoMsg {
+  _StrokeUndoMsgImpl({
     required int roomId,
-    required String svg,
+    required int playerId,
+    required String strokeId,
   }) : super._(
          roomId: roomId,
-         svg: svg,
+         playerId: playerId,
+         strokeId: strokeId,
        );
 
-  /// Returns a shallow copy of this [FinalCanvasMsg]
+  /// Returns a shallow copy of this [StrokeUndoMsg]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
   @override
-  FinalCanvasMsg copyWith({
+  StrokeUndoMsg copyWith({
     int? roomId,
-    String? svg,
+    int? playerId,
+    String? strokeId,
   }) {
-    return FinalCanvasMsg(
+    return StrokeUndoMsg(
       roomId: roomId ?? this.roomId,
-      svg: svg ?? this.svg,
+      playerId: playerId ?? this.playerId,
+      strokeId: strokeId ?? this.strokeId,
     );
   }
 }

@@ -20,6 +20,9 @@ import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
     as _i7;
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
     as _i8;
+import 'package:draw_together_serverpod_server/src/generated/future_calls.dart'
+    as _i9;
+export 'future_calls.dart' show ServerpodFutureCallsGetter;
 
 class Endpoints extends _i1.EndpointDispatch {
   @override
@@ -371,24 +374,6 @@ class Endpoints extends _i1.EndpointDispatch {
                 params['durationSeconds'],
               ),
         ),
-        'endGame': _i1.MethodConnector(
-          name: 'endGame',
-          params: {
-            'roomId': _i1.ParameterDescription(
-              name: 'roomId',
-              type: _i1.getType<int>(),
-              nullable: false,
-            ),
-          },
-          call:
-              (
-                _i1.Session session,
-                Map<String, dynamic> params,
-              ) async => (endpoints['room'] as _i5.RoomEndpoint).endGame(
-                session,
-                params['roomId'],
-              ),
-        ),
         'getPlayer': _i1.MethodConnector(
           name: 'getPlayer',
           params: {
@@ -474,5 +459,10 @@ class Endpoints extends _i1.EndpointDispatch {
       ..initializeEndpoints(server);
     modules['serverpod_auth_core'] = _i8.Endpoints()
       ..initializeEndpoints(server);
+  }
+
+  @override
+  _i1.FutureCallDispatch? get futureCalls {
+    return _i9.FutureCalls();
   }
 }

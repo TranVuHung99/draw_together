@@ -39,6 +39,10 @@ dependencies:
   draw_together_serverpod_client:
     path: ../draw_together_serverpod/draw_together_serverpod_client
   image: ^4.8.0
+  # Renders the final composite, which the server sends as an SVG document.
+  flutter_svg: ^2.0.10
+  # Hands an exported PNG to the browser as a download.
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:
