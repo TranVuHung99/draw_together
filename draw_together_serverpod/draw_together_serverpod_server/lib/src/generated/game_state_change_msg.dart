@@ -18,12 +18,14 @@ abstract class GameStateChangeMsg
     required this.roomId,
     required this.status,
     this.endTime,
+    this.remainingMs,
   });
 
   factory GameStateChangeMsg({
     required int roomId,
     required String status,
     DateTime? endTime,
+    int? remainingMs,
   }) = _GameStateChangeMsgImpl;
 
   factory GameStateChangeMsg.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -33,6 +35,7 @@ abstract class GameStateChangeMsg
       endTime: jsonSerialization['endTime'] == null
           ? null
           : _i1.DateTimeJsonExtension.fromJson(jsonSerialization['endTime']),
+      remainingMs: jsonSerialization['remainingMs'] as int?,
     );
   }
 
@@ -42,6 +45,8 @@ abstract class GameStateChangeMsg
 
   DateTime? endTime;
 
+  int? remainingMs;
+
   /// Returns a shallow copy of this [GameStateChangeMsg]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
@@ -49,6 +54,7 @@ abstract class GameStateChangeMsg
     int? roomId,
     String? status,
     DateTime? endTime,
+    int? remainingMs,
   });
   @override
   Map<String, dynamic> toJson() {
@@ -57,6 +63,7 @@ abstract class GameStateChangeMsg
       'roomId': roomId,
       'status': status,
       if (endTime != null) 'endTime': endTime?.toJson(),
+      if (remainingMs != null) 'remainingMs': remainingMs,
     };
   }
 
@@ -67,6 +74,7 @@ abstract class GameStateChangeMsg
       'roomId': roomId,
       'status': status,
       if (endTime != null) 'endTime': endTime?.toJson(),
+      if (remainingMs != null) 'remainingMs': remainingMs,
     };
   }
 
@@ -83,10 +91,12 @@ class _GameStateChangeMsgImpl extends GameStateChangeMsg {
     required int roomId,
     required String status,
     DateTime? endTime,
+    int? remainingMs,
   }) : super._(
          roomId: roomId,
          status: status,
          endTime: endTime,
+         remainingMs: remainingMs,
        );
 
   /// Returns a shallow copy of this [GameStateChangeMsg]
@@ -97,11 +107,13 @@ class _GameStateChangeMsgImpl extends GameStateChangeMsg {
     int? roomId,
     String? status,
     Object? endTime = _Undefined,
+    Object? remainingMs = _Undefined,
   }) {
     return GameStateChangeMsg(
       roomId: roomId ?? this.roomId,
       status: status ?? this.status,
       endTime: endTime is DateTime? ? endTime : this.endTime,
+      remainingMs: remainingMs is int? ? remainingMs : this.remainingMs,
     );
   }
 }

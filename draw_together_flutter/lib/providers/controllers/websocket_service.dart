@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/serverpod_client.dart';
 import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart';
 import '../game_providers.dart';
+import 'target_image_controller.dart';
 
 final webSocketServiceProvider = Provider<WebSocketService>((ref) {
   final service = WebSocketService(ref);
@@ -14,8 +15,15 @@ final webSocketServiceProvider = Provider<WebSocketService>((ref) {
 class WebSocketService {
   final Ref ref;
   bool _isListening = false;
+  // Deliberately single-subscription, not a broadcast controller. The Serverpod
+  // client only attaches its listener after the websocket handshake and the
+  // open-stream round trip have both completed, which is well after `connect()`
+  // adds the first `RoomSubscribeMsg`. A broadcast controller drops events that
+  // arrive with no listener attached, which silently discarded the subscribe
+  // message and left the connection subscribed to no room at all. A
+  // single-subscription controller buffers until the client listens.
   final StreamController<SerializableModel> _outgoingController =
-      StreamController<SerializableModel>.broadcast();
+      StreamController<SerializableModel>();
   StreamSubscription? _incomingSubscription;
 
   WebSocketService(this.ref);
@@ -42,6 +50,10 @@ class WebSocketService {
   void _handleIncomingMessage(SerializableModel message) {
     if (message is StrokeSyncMsg) {
       ref.read(strokesProvider.notifier).handleStrokeSync(message);
+    } else if (message is StrokeUndoMsg) {
+      // The server confirms every undo, including the local player's own, so
+      // this is the only place a stroke is retracted.
+      ref.read(strokesProvider.notifier).handleUndo(message);
     } else if (message is GameStateChangeMsg) {
       // A change in room game state or new player joined
 
@@ -53,20 +65,31 @@ class WebSocketService {
           // Easiest is to trigger a refresh via RoomController.
           _refreshPlayers(message.roomId);
         } else {
+          // `endTime` and `remainingMs` are each other's opposite — the server
+          // clears one as it sets the other — so both are applied from every
+          // change rather than only the one the new status happens to use.
           ref
               .read(roomProvider.notifier)
               .set(
-                room.copyWith(status: message.status, endTime: message.endTime),
+                room.copyWith(
+                  status: message.status,
+                  endTime: message.endTime,
+                  remainingMs: message.remainingMs,
+                ),
               );
           if (message.status == 'PLAYING') {
             // Regions are assigned as the game starts, so the local player and
             // the roster are both stale from this moment.
             _refreshPlayers(message.roomId);
+            // The crop is cut from the same regions, so it is fetched here
+            // too. A client that never sees this message fetches it on
+            // entering the game screen instead.
+            ref.read(targetImageControllerProvider).load();
           }
         }
       }
     } else if (message is FinalCanvasMsg) {
-      ref.read(finalImageBase64Provider.notifier).set(message.base64Image);
+      ref.read(finalCanvasSvgProvider.notifier).set(message.svg);
       // Ensure local room state reflects finished
       final room = ref.read(roomProvider);
       if (room != null) {

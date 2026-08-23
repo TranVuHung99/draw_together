@@ -21,6 +21,8 @@ abstract class Room implements _i1.SerializableModel {
     required this.canvasWidth,
     required this.canvasHeight,
     this.endTime,
+    this.pausedAt,
+    this.remainingMs,
   });
 
   factory Room({
@@ -31,6 +33,8 @@ abstract class Room implements _i1.SerializableModel {
     required double canvasWidth,
     required double canvasHeight,
     DateTime? endTime,
+    DateTime? pausedAt,
+    int? remainingMs,
   }) = _RoomImpl;
 
   factory Room.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -44,6 +48,10 @@ abstract class Room implements _i1.SerializableModel {
       endTime: jsonSerialization['endTime'] == null
           ? null
           : _i1.DateTimeJsonExtension.fromJson(jsonSerialization['endTime']),
+      pausedAt: jsonSerialization['pausedAt'] == null
+          ? null
+          : _i1.DateTimeJsonExtension.fromJson(jsonSerialization['pausedAt']),
+      remainingMs: jsonSerialization['remainingMs'] as int?,
     );
   }
 
@@ -64,6 +72,10 @@ abstract class Room implements _i1.SerializableModel {
 
   DateTime? endTime;
 
+  DateTime? pausedAt;
+
+  int? remainingMs;
+
   /// Returns a shallow copy of this [Room]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
@@ -75,6 +87,8 @@ abstract class Room implements _i1.SerializableModel {
     double? canvasWidth,
     double? canvasHeight,
     DateTime? endTime,
+    DateTime? pausedAt,
+    int? remainingMs,
   });
   @override
   Map<String, dynamic> toJson() {
@@ -87,6 +101,8 @@ abstract class Room implements _i1.SerializableModel {
       'canvasWidth': canvasWidth,
       'canvasHeight': canvasHeight,
       if (endTime != null) 'endTime': endTime?.toJson(),
+      if (pausedAt != null) 'pausedAt': pausedAt?.toJson(),
+      if (remainingMs != null) 'remainingMs': remainingMs,
     };
   }
 
@@ -107,6 +123,8 @@ class _RoomImpl extends Room {
     required double canvasWidth,
     required double canvasHeight,
     DateTime? endTime,
+    DateTime? pausedAt,
+    int? remainingMs,
   }) : super._(
          id: id,
          roomCode: roomCode,
@@ -115,6 +133,8 @@ class _RoomImpl extends Room {
          canvasWidth: canvasWidth,
          canvasHeight: canvasHeight,
          endTime: endTime,
+         pausedAt: pausedAt,
+         remainingMs: remainingMs,
        );
 
   /// Returns a shallow copy of this [Room]
@@ -129,6 +149,8 @@ class _RoomImpl extends Room {
     double? canvasWidth,
     double? canvasHeight,
     Object? endTime = _Undefined,
+    Object? pausedAt = _Undefined,
+    Object? remainingMs = _Undefined,
   }) {
     return Room(
       id: id is int? ? id : this.id,
@@ -138,6 +160,8 @@ class _RoomImpl extends Room {
       canvasWidth: canvasWidth ?? this.canvasWidth,
       canvasHeight: canvasHeight ?? this.canvasHeight,
       endTime: endTime is DateTime? ? endTime : this.endTime,
+      pausedAt: pausedAt is DateTime? ? pausedAt : this.pausedAt,
+      remainingMs: remainingMs is int? ? remainingMs : this.remainingMs,
     );
   }
 }

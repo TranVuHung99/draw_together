@@ -19,8 +19,15 @@ import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
 import 'package:draw_together_serverpod_server/src/generated/room.dart' as _i5;
 import 'package:draw_together_serverpod_server/src/generated/player.dart'
     as _i6;
-import 'package:draw_together_serverpod_server/src/generated/greetings/greeting.dart'
+import 'package:draw_together_serverpod_server/src/generated/target_image.dart'
     as _i7;
+import 'dart:typed_data' as _i8;
+import 'package:draw_together_serverpod_server/src/generated/greetings/greeting.dart'
+    as _i9;
+import 'package:draw_together_serverpod_server/src/generated/future_calls_generated_models/game_end_future_call_finalize_room_model.dart'
+    as _i10;
+import 'package:draw_together_serverpod_server/src/generated/future_calls.dart'
+    as _i11;
 import 'package:draw_together_serverpod_server/src/generated/protocol.dart';
 import 'package:draw_together_serverpod_server/src/generated/endpoints.dart';
 export 'package:serverpod_test/serverpod_test_public_exports.dart';
@@ -128,6 +135,8 @@ void withServerpod(
 }
 
 class TestEndpoints {
+  late final futureCalls = _FutureCalls();
+
   late final _EmailIdpEndpoint emailIdp;
 
   late final _JwtRefreshEndpoint jwtRefresh;
@@ -167,6 +176,10 @@ class _InternalTestEndpoints extends TestEndpoints
       serializationManager,
     );
   }
+}
+
+class _FutureCalls {
+  late final gameEnd = _GameEndFutureCall();
 }
 
 class _EmailIdpEndpoint {
@@ -616,6 +629,7 @@ class _RoomEndpoint {
   _i3.Future<bool> startGame(
     _i1.TestSessionBuilder sessionBuilder,
     int roomId,
+    int playerId,
     int durationSeconds,
   ) async {
     return _i1.callAwaitableFunctionAndHandleExceptions(() async {
@@ -631,6 +645,7 @@ class _RoomEndpoint {
           methodName: 'startGame',
           parameters: _i1.testObjectToJson({
             'roomId': roomId,
+            'playerId': playerId,
             'durationSeconds': durationSeconds,
           }),
           serializationManager: _serializationManager,
@@ -648,22 +663,168 @@ class _RoomEndpoint {
     });
   }
 
-  _i3.Future<bool> endGame(
+  _i3.Future<bool> pauseGame(
     _i1.TestSessionBuilder sessionBuilder,
     int roomId,
+    int playerId,
   ) async {
     return _i1.callAwaitableFunctionAndHandleExceptions(() async {
       var _localUniqueSession =
           (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
             endpoint: 'room',
-            method: 'endGame',
+            method: 'pauseGame',
           );
       try {
         var _localCallContext = await _endpointDispatch.getMethodCallContext(
           createSessionCallback: (_) => _localUniqueSession,
           endpointPath: 'room',
-          methodName: 'endGame',
-          parameters: _i1.testObjectToJson({'roomId': roomId}),
+          methodName: 'pauseGame',
+          parameters: _i1.testObjectToJson({
+            'roomId': roomId,
+            'playerId': playerId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _i3.Future<bool>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _i3.Future<bool> resumeGame(
+    _i1.TestSessionBuilder sessionBuilder,
+    int roomId,
+    int playerId,
+  ) async {
+    return _i1.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'room',
+            method: 'resumeGame',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'room',
+          methodName: 'resumeGame',
+          parameters: _i1.testObjectToJson({
+            'roomId': roomId,
+            'playerId': playerId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _i3.Future<bool>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _i3.Future<bool> stopGame(
+    _i1.TestSessionBuilder sessionBuilder,
+    int roomId,
+    int playerId,
+  ) async {
+    return _i1.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'room',
+            method: 'stopGame',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'room',
+          methodName: 'stopGame',
+          parameters: _i1.testObjectToJson({
+            'roomId': roomId,
+            'playerId': playerId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _i3.Future<bool>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _i3.Future<_i7.TargetImage?> getTargetImagePart(
+    _i1.TestSessionBuilder sessionBuilder,
+    int roomId,
+    int playerId,
+  ) async {
+    return _i1.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'room',
+            method: 'getTargetImagePart',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'room',
+          methodName: 'getTargetImagePart',
+          parameters: _i1.testObjectToJson({
+            'roomId': roomId,
+            'playerId': playerId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _i3.Future<_i7.TargetImage?>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _i3.Future<bool> uploadTargetImage(
+    _i1.TestSessionBuilder sessionBuilder,
+    int roomId,
+    int playerId,
+    _i8.ByteData bytes,
+  ) async {
+    return _i1.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'room',
+            method: 'uploadTargetImage',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'room',
+          methodName: 'uploadTargetImage',
+          parameters: _i1.testObjectToJson({
+            'roomId': roomId,
+            'playerId': playerId,
+            'bytes': bytes,
+          }),
           serializationManager: _serializationManager,
         );
         var _localReturnValue =
@@ -783,7 +944,7 @@ class _GreetingEndpoint {
 
   final _i2.SerializationManager _serializationManager;
 
-  _i3.Future<_i7.Greeting> hello(
+  _i3.Future<_i9.Greeting> hello(
     _i1.TestSessionBuilder sessionBuilder,
     String name,
   ) async {
@@ -806,11 +967,34 @@ class _GreetingEndpoint {
                   _localUniqueSession,
                   _localCallContext.arguments,
                 )
-                as _i3.Future<_i7.Greeting>);
+                as _i3.Future<_i9.Greeting>);
         return _localReturnValue;
       } finally {
         await _localUniqueSession.close();
       }
     });
+  }
+}
+
+class _GameEndFutureCall {
+  Future<void> finalizeRoom(
+    _i1.TestSessionBuilder sessionBuilder,
+    int roomId, {
+    bool ignoreDeadline = false,
+  }) async {
+    var object = _i10.GameEndFutureCallFinalizeRoomModel(
+      roomId: roomId,
+      ignoreDeadline: ignoreDeadline,
+    );
+    var _localUniqueSession = (sessionBuilder as _i1.InternalTestSessionBuilder)
+        .internalBuild();
+    try {
+      await _i11.GameEndFinalizeRoomFutureCall().invoke(
+        _localUniqueSession,
+        object,
+      );
+    } finally {
+      await _localUniqueSession.close();
+    }
   }
 }

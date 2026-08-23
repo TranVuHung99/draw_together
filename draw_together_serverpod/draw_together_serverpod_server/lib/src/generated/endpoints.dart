@@ -16,10 +16,14 @@ import '../auth/jwt_refresh_endpoint.dart' as _i3;
 import '../endpoints/game_streaming_endpoint.dart' as _i4;
 import '../endpoints/room_endpoint.dart' as _i5;
 import '../greetings/greeting_endpoint.dart' as _i6;
+import 'dart:typed_data' as _i7;
 import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
-    as _i7;
-import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
     as _i8;
+import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
+    as _i9;
+import 'package:draw_together_serverpod_server/src/generated/future_calls.dart'
+    as _i10;
+export 'future_calls.dart' show ServerpodFutureCallsGetter;
 
 class Endpoints extends _i1.EndpointDispatch {
   @override
@@ -355,6 +359,11 @@ class Endpoints extends _i1.EndpointDispatch {
               type: _i1.getType<int>(),
               nullable: false,
             ),
+            'playerId': _i1.ParameterDescription(
+              name: 'playerId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
             'durationSeconds': _i1.ParameterDescription(
               name: 'durationSeconds',
               type: _i1.getType<int>(),
@@ -368,14 +377,20 @@ class Endpoints extends _i1.EndpointDispatch {
               ) async => (endpoints['room'] as _i5.RoomEndpoint).startGame(
                 session,
                 params['roomId'],
+                params['playerId'],
                 params['durationSeconds'],
               ),
         ),
-        'endGame': _i1.MethodConnector(
-          name: 'endGame',
+        'pauseGame': _i1.MethodConnector(
+          name: 'pauseGame',
           params: {
             'roomId': _i1.ParameterDescription(
               name: 'roomId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'playerId': _i1.ParameterDescription(
+              name: 'playerId',
               type: _i1.getType<int>(),
               nullable: false,
             ),
@@ -384,10 +399,115 @@ class Endpoints extends _i1.EndpointDispatch {
               (
                 _i1.Session session,
                 Map<String, dynamic> params,
-              ) async => (endpoints['room'] as _i5.RoomEndpoint).endGame(
+              ) async => (endpoints['room'] as _i5.RoomEndpoint).pauseGame(
                 session,
                 params['roomId'],
+                params['playerId'],
               ),
+        ),
+        'resumeGame': _i1.MethodConnector(
+          name: 'resumeGame',
+          params: {
+            'roomId': _i1.ParameterDescription(
+              name: 'roomId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'playerId': _i1.ParameterDescription(
+              name: 'playerId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async => (endpoints['room'] as _i5.RoomEndpoint).resumeGame(
+                session,
+                params['roomId'],
+                params['playerId'],
+              ),
+        ),
+        'stopGame': _i1.MethodConnector(
+          name: 'stopGame',
+          params: {
+            'roomId': _i1.ParameterDescription(
+              name: 'roomId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'playerId': _i1.ParameterDescription(
+              name: 'playerId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async => (endpoints['room'] as _i5.RoomEndpoint).stopGame(
+                session,
+                params['roomId'],
+                params['playerId'],
+              ),
+        ),
+        'getTargetImagePart': _i1.MethodConnector(
+          name: 'getTargetImagePart',
+          params: {
+            'roomId': _i1.ParameterDescription(
+              name: 'roomId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'playerId': _i1.ParameterDescription(
+              name: 'playerId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async =>
+                  (endpoints['room'] as _i5.RoomEndpoint).getTargetImagePart(
+                    session,
+                    params['roomId'],
+                    params['playerId'],
+                  ),
+        ),
+        'uploadTargetImage': _i1.MethodConnector(
+          name: 'uploadTargetImage',
+          params: {
+            'roomId': _i1.ParameterDescription(
+              name: 'roomId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'playerId': _i1.ParameterDescription(
+              name: 'playerId',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'bytes': _i1.ParameterDescription(
+              name: 'bytes',
+              type: _i1.getType<_i7.ByteData>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async =>
+                  (endpoints['room'] as _i5.RoomEndpoint).uploadTargetImage(
+                    session,
+                    params['roomId'],
+                    params['playerId'],
+                    params['bytes'],
+                  ),
         ),
         'getPlayer': _i1.MethodConnector(
           name: 'getPlayer',
@@ -470,9 +590,14 @@ class Endpoints extends _i1.EndpointDispatch {
         ),
       },
     );
-    modules['serverpod_auth_idp'] = _i7.Endpoints()
+    modules['serverpod_auth_idp'] = _i8.Endpoints()
       ..initializeEndpoints(server);
-    modules['serverpod_auth_core'] = _i8.Endpoints()
+    modules['serverpod_auth_core'] = _i9.Endpoints()
       ..initializeEndpoints(server);
+  }
+
+  @override
+  _i1.FutureCallDispatch? get futureCalls {
+    return _i10.FutureCalls();
   }
 }

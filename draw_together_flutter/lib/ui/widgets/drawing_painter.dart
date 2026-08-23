@@ -1,20 +1,37 @@
 import 'package:flutter/material.dart';
 import '../../models/canvas_viewport.dart';
 import '../../models/stroke.dart';
+import '../../models/stroke_board.dart';
 
-/// Paints every stroke through a single viewport.
+/// Composes the canvas as one layer per drawing player and maps the result
+/// through the viewport.
 ///
-/// Strokes are stored in normalized canvas coordinates, so this is the one
-/// place that turns them into widget pixels. Anything outside the viewport is
-/// clipped away, which is what keeps other players' work off a draw-mode view.
+/// The composition happens in normalized canvas space: the viewport transform
+/// is applied to the canvas first, and everything below is drawn in canvas
+/// coordinates. Doing it the other way round would clip a draw-mode view
+/// against a magnified region and compute the eraser mask at a different
+/// resolution in each view; this way draw mode and the full-canvas views are
+/// the same composed image at different magnifications.
+///
+/// Each player's strokes go into their own layer, clipped to their region, so
+/// an eraser clears only its owner's work. The layers are composited in
+/// ascending player id order. The host owns no region and no strokes, and so
+/// contributes no layer.
 class DrawingPainter extends CustomPainter {
-  final List<Stroke> strokes;
+  final StrokeBoard board;
+
+  /// The region of each drawing player, in normalized canvas coordinates.
+  final Map<int, Rect> regions;
+
+  /// The local player's stroke in progress, painted into their own layer.
   final Stroke? currentStroke;
+
   final CanvasViewport viewport;
   final Color background;
 
   DrawingPainter({
-    required this.strokes,
+    required this.board,
+    required this.regions,
     required this.viewport,
     this.currentStroke,
     this.background = Colors.white,
@@ -27,36 +44,138 @@ class DrawingPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(destination);
 
-    // The background sits outside the layer below, so an eraser clears strokes
+    // The background sits outside every layer, so an eraser clears strokes
     // down to it rather than punching a hole through it.
     canvas.drawRect(destination, Paint()..color = background);
 
-    // Save the layer so BlendMode.clear works properly for erasing
-    canvas.saveLayer(destination, Paint());
+    // From here on the canvas is in normalized coordinates.
+    canvas.translate(destination.left, destination.top);
+    canvas.scale(viewport.scaleX, viewport.scaleY);
+    canvas.translate(-viewport.viewport.left, -viewport.viewport.top);
 
-    for (final stroke in strokes) {
-      canvas.drawPath(stroke.toPath(viewport), stroke.paint);
-    }
+    for (final playerId in _layerOwners()) {
+      final strokes = board.strokesOf(playerId);
+      final active = currentStroke?.playerId == playerId ? currentStroke : null;
+      if (strokes.isEmpty && active == null) continue;
 
-    final active = currentStroke;
-    if (active != null) {
-      canvas.drawPath(active.toPath(viewport), active.paint);
+      // A stroke owner always has a region; falling back to the whole canvas
+      // covers only the moment before a stale roster catches up, and keeps the
+      // eraser inside a layer even then.
+      final region = regions[playerId] ?? CanvasViewport.fullCanvas;
+
+      canvas.saveLayer(region, Paint());
+      canvas.clipRect(region);
+      // Strokes are held in the order they were completed, which is the
+      // server's sequence order.
+      for (final stroke in strokes) {
+        canvas.drawPath(stroke.toPath(), stroke.paint);
+      }
+      if (active != null) {
+        canvas.drawPath(active.toPath(), active.paint);
+      }
+      canvas.restore();
     }
 
     canvas.restore();
-    canvas.restore();
+  }
+
+  /// Every player with something to draw, in composition order.
+  List<int> _layerOwners() {
+    final owners = {...regions.keys, ...board.byPlayer.keys};
+    final active = currentStroke?.playerId;
+    if (active != null) owners.add(active);
+    return owners.toList()..sort();
   }
 
   @override
   bool shouldRepaint(covariant DrawingPainter oldDelegate) {
     return oldDelegate.viewport != viewport ||
         oldDelegate.background != background ||
-        !identical(oldDelegate.strokes, strokes) ||
+        !identical(oldDelegate.board, board) ||
+        !identical(oldDelegate.regions, regions) ||
         !identical(oldDelegate.currentStroke, currentStroke) ||
         // The stroke in progress is mutated in place, so its identity alone
         // does not tell us whether it grew.
         oldDelegate.currentStroke?.points.length !=
             currentStroke?.points.length;
+  }
+}
+
+/// Draws each drawing player's region as a labelled outline in that player's
+/// own colour, so the host can name the owner of any rectangle at a glance.
+///
+/// This is not artwork. It is painted above the composed canvas and outside
+/// [DrawingPainter]'s paint tree — whose output is what the server's SVG
+/// mirrors requirement for requirement — so it appears on screen and in
+/// neither the composite nor a PNG export.
+class RegionOwnershipPainter extends CustomPainter {
+  /// Each region in normalized canvas coordinates, with its owner's name and
+  /// colour.
+  final List<({Rect region, String name, Color color})> owners;
+  final CanvasViewport viewport;
+
+  RegionOwnershipPainter({required this.owners, required this.viewport});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(viewport.destination);
+
+    for (final owner in owners) {
+      final rect = viewport.toWidgetRect(owner.region);
+      canvas.drawRect(
+        rect.deflate(1),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..color = owner.color
+          ..strokeWidth = 2,
+      );
+
+      final label = TextPainter(
+        text: TextSpan(
+          text: owner.name,
+          style: TextStyle(
+            color: owner.color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: rect.width - 8);
+
+      // A chip behind the name, so it stays readable over whatever has been
+      // drawn underneath it.
+      final origin = Offset(rect.left + 4, rect.top + 4);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            origin.dx - 3,
+            origin.dy - 2,
+            label.width + 6,
+            label.height + 4,
+          ),
+          const Radius.circular(3),
+        ),
+        Paint()..color = Colors.white.withValues(alpha: 0.8),
+      );
+      label.paint(canvas, origin);
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant RegionOwnershipPainter oldDelegate) {
+    if (oldDelegate.viewport != viewport) return true;
+    if (oldDelegate.owners.length != owners.length) return true;
+    for (var i = 0; i < owners.length; i++) {
+      final a = oldDelegate.owners[i];
+      final b = owners[i];
+      if (a.region != b.region || a.name != b.name || a.color != b.color) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

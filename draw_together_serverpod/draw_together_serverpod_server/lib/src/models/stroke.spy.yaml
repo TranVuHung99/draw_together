@@ -1,0 +1,22 @@
+class: Stroke
+table: stroke
+fields:
+  roomId: int
+  playerId: int
+  # Client-generated UUID, reused as the idempotency key so a duplicated 'end'
+  # message writes a single row.
+  strokeId: String
+  # Normalized canvas points as alternating x, y values in the range 0.0-1.0,
+  # matching StrokeSyncMsg. Stored as a json column.
+  points: List<double>
+  colorInfo: String
+  # A fraction of the canvas width, normalized like the points.
+  strokeWidth: double
+  isEraser: bool
+  # Per-room monotonic paint order, assigned by the server on insert. Client
+  # clocks are not trustworthy enough to order by timestamp.
+  sequence: int
+  timestamp: DateTime
+indexes:
+  stroke_room_seq_idx:
+    fields: roomId, sequence

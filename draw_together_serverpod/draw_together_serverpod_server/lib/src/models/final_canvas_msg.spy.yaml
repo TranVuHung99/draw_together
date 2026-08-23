@@ -1,4 +1,6 @@
 class: FinalCanvasMsg
 fields:
   roomId: int
-  base64Image: String
+  # The composite, as an SVG document authored in a unit viewBox. Clients
+  # render it directly; PNG export is an on-demand client action.
+  svg: String

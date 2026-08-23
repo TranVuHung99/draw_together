@@ -2,3 +2,7 @@
 .vscode/
 .DS_Store
 *.swp
+
+## AI Agents
+openspec
+.claude

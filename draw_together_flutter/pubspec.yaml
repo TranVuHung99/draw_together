@@ -39,6 +39,17 @@ dependencies:
   draw_together_serverpod_client:
     path: ../draw_together_serverpod/draw_together_serverpod_client
   image: ^4.8.0
+  # Renders the final composite, which the server sends as an SVG document.
+  flutter_svg: ^2.0.10
+  # Hands an exported PNG to the browser as a download.
+  web: ^1.1.0
+  # The drawing colour picker: a wheel and editable hex alongside the shared
+  # palette, so a player is not limited to a handful of preset colours.
+  flex_color_picker: ^3.8.0
+  # Picks the host's target image. It returns bytes on web and on every desktop
+  # target, which suits a web-first client better than the gallery-oriented
+  # image_picker.
+  file_picker: ^8.1.2
 
 dev_dependencies:
   flutter_test:

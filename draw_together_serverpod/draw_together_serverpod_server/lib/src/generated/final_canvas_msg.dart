@@ -16,38 +16,38 @@ abstract class FinalCanvasMsg
     implements _i1.SerializableModel, _i1.ProtocolSerialization {
   FinalCanvasMsg._({
     required this.roomId,
-    required this.base64Image,
+    required this.svg,
   });
 
   factory FinalCanvasMsg({
     required int roomId,
-    required String base64Image,
+    required String svg,
   }) = _FinalCanvasMsgImpl;
 
   factory FinalCanvasMsg.fromJson(Map<String, dynamic> jsonSerialization) {
     return FinalCanvasMsg(
       roomId: jsonSerialization['roomId'] as int,
-      base64Image: jsonSerialization['base64Image'] as String,
+      svg: jsonSerialization['svg'] as String,
     );
   }
 
   int roomId;
 
-  String base64Image;
+  String svg;
 
   /// Returns a shallow copy of this [FinalCanvasMsg]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
   FinalCanvasMsg copyWith({
     int? roomId,
-    String? base64Image,
+    String? svg,
   });
   @override
   Map<String, dynamic> toJson() {
     return {
       '__className__': 'FinalCanvasMsg',
       'roomId': roomId,
-      'base64Image': base64Image,
+      'svg': svg,
     };
   }
 
@@ -56,7 +56,7 @@ abstract class FinalCanvasMsg
     return {
       '__className__': 'FinalCanvasMsg',
       'roomId': roomId,
-      'base64Image': base64Image,
+      'svg': svg,
     };
   }
 
@@ -69,10 +69,10 @@ abstract class FinalCanvasMsg
 class _FinalCanvasMsgImpl extends FinalCanvasMsg {
   _FinalCanvasMsgImpl({
     required int roomId,
-    required String base64Image,
+    required String svg,
   }) : super._(
          roomId: roomId,
-         base64Image: base64Image,
+         svg: svg,
        );
 
   /// Returns a shallow copy of this [FinalCanvasMsg]
@@ -81,11 +81,11 @@ class _FinalCanvasMsgImpl extends FinalCanvasMsg {
   @override
   FinalCanvasMsg copyWith({
     int? roomId,
-    String? base64Image,
+    String? svg,
   }) {
     return FinalCanvasMsg(
       roomId: roomId ?? this.roomId,
-      base64Image: base64Image ?? this.base64Image,
+      svg: svg ?? this.svg,
     );
   }
 }

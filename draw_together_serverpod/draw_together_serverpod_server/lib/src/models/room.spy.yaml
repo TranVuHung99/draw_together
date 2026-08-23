@@ -6,4 +6,12 @@ fields:
   status: String
   canvasWidth: double
   canvasHeight: double
+  # The live deadline while the room is PLAYING. Cleared on pause, so the
+  # invariant "endTime is a deadline that will fire" holds unconditionally.
   endTime: DateTime?
+  # Set while the room is PAUSED, and null in every other state.
+  pausedAt: DateTime?
+  # The time left on the deadline at the moment of the pause. It is the room's
+  # answer to "how long is left" while paused, the way endTime is while
+  # playing, so the countdown never has to reconstruct one from the other.
+  remainingMs: int?

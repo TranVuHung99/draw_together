@@ -21,6 +21,8 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
     required this.canvasWidth,
     required this.canvasHeight,
     this.endTime,
+    this.pausedAt,
+    this.remainingMs,
   });
 
   factory Room({
@@ -31,6 +33,8 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
     required double canvasWidth,
     required double canvasHeight,
     DateTime? endTime,
+    DateTime? pausedAt,
+    int? remainingMs,
   }) = _RoomImpl;
 
   factory Room.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -44,6 +48,10 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
       endTime: jsonSerialization['endTime'] == null
           ? null
           : _i1.DateTimeJsonExtension.fromJson(jsonSerialization['endTime']),
+      pausedAt: jsonSerialization['pausedAt'] == null
+          ? null
+          : _i1.DateTimeJsonExtension.fromJson(jsonSerialization['pausedAt']),
+      remainingMs: jsonSerialization['remainingMs'] as int?,
     );
   }
 
@@ -66,6 +74,10 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
 
   DateTime? endTime;
 
+  DateTime? pausedAt;
+
+  int? remainingMs;
+
   @override
   _i1.Table<int?> get table => t;
 
@@ -80,6 +92,8 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
     double? canvasWidth,
     double? canvasHeight,
     DateTime? endTime,
+    DateTime? pausedAt,
+    int? remainingMs,
   });
   @override
   Map<String, dynamic> toJson() {
@@ -92,6 +106,8 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
       'canvasWidth': canvasWidth,
       'canvasHeight': canvasHeight,
       if (endTime != null) 'endTime': endTime?.toJson(),
+      if (pausedAt != null) 'pausedAt': pausedAt?.toJson(),
+      if (remainingMs != null) 'remainingMs': remainingMs,
     };
   }
 
@@ -106,6 +122,8 @@ abstract class Room implements _i1.TableRow<int?>, _i1.ProtocolSerialization {
       'canvasWidth': canvasWidth,
       'canvasHeight': canvasHeight,
       if (endTime != null) 'endTime': endTime?.toJson(),
+      if (pausedAt != null) 'pausedAt': pausedAt?.toJson(),
+      if (remainingMs != null) 'remainingMs': remainingMs,
     };
   }
 
@@ -150,6 +168,8 @@ class _RoomImpl extends Room {
     required double canvasWidth,
     required double canvasHeight,
     DateTime? endTime,
+    DateTime? pausedAt,
+    int? remainingMs,
   }) : super._(
          id: id,
          roomCode: roomCode,
@@ -158,6 +178,8 @@ class _RoomImpl extends Room {
          canvasWidth: canvasWidth,
          canvasHeight: canvasHeight,
          endTime: endTime,
+         pausedAt: pausedAt,
+         remainingMs: remainingMs,
        );
 
   /// Returns a shallow copy of this [Room]
@@ -172,6 +194,8 @@ class _RoomImpl extends Room {
     double? canvasWidth,
     double? canvasHeight,
     Object? endTime = _Undefined,
+    Object? pausedAt = _Undefined,
+    Object? remainingMs = _Undefined,
   }) {
     return Room(
       id: id is int? ? id : this.id,
@@ -181,6 +205,8 @@ class _RoomImpl extends Room {
       canvasWidth: canvasWidth ?? this.canvasWidth,
       canvasHeight: canvasHeight ?? this.canvasHeight,
       endTime: endTime is DateTime? ? endTime : this.endTime,
+      pausedAt: pausedAt is DateTime? ? pausedAt : this.pausedAt,
+      remainingMs: remainingMs is int? ? remainingMs : this.remainingMs,
     );
   }
 }
@@ -218,6 +244,17 @@ class RoomUpdateTable extends _i1.UpdateTable<RoomTable> {
         table.endTime,
         value,
       );
+
+  _i1.ColumnValue<DateTime, DateTime> pausedAt(DateTime? value) =>
+      _i1.ColumnValue(
+        table.pausedAt,
+        value,
+      );
+
+  _i1.ColumnValue<int, int> remainingMs(int? value) => _i1.ColumnValue(
+    table.remainingMs,
+    value,
+  );
 }
 
 class RoomTable extends _i1.Table<int?> {
@@ -247,6 +284,14 @@ class RoomTable extends _i1.Table<int?> {
       'endTime',
       this,
     );
+    pausedAt = _i1.ColumnDateTime(
+      'pausedAt',
+      this,
+    );
+    remainingMs = _i1.ColumnInt(
+      'remainingMs',
+      this,
+    );
   }
 
   late final RoomUpdateTable updateTable;
@@ -263,6 +308,10 @@ class RoomTable extends _i1.Table<int?> {
 
   late final _i1.ColumnDateTime endTime;
 
+  late final _i1.ColumnDateTime pausedAt;
+
+  late final _i1.ColumnInt remainingMs;
+
   @override
   List<_i1.Column> get columns => [
     id,
@@ -272,6 +321,8 @@ class RoomTable extends _i1.Table<int?> {
     canvasWidth,
     canvasHeight,
     endTime,
+    pausedAt,
+    remainingMs,
   ];
 }
 
