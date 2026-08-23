@@ -27,8 +27,9 @@ import 'room_subscribe_msg.dart' as _i11;
 import 'stroke.dart' as _i12;
 import 'stroke_sync_msg.dart' as _i13;
 import 'stroke_undo_msg.dart' as _i14;
+import 'target_image.dart' as _i15;
 import 'package:draw_together_serverpod_server/src/generated/player.dart'
-    as _i15;
+    as _i16;
 export 'final_canvas_msg.dart';
 export 'game_state_change_msg.dart';
 export 'greetings/greeting.dart';
@@ -38,6 +39,7 @@ export 'room_subscribe_msg.dart';
 export 'stroke.dart';
 export 'stroke_sync_msg.dart';
 export 'stroke_undo_msg.dart';
+export 'target_image.dart';
 
 class Protocol extends _i1.SerializationManagerServer {
   Protocol._();
@@ -170,6 +172,18 @@ class Protocol extends _i1.SerializationManagerServer {
           isNullable: true,
           dartType: 'DateTime?',
         ),
+        _i2.ColumnDefinition(
+          name: 'pausedAt',
+          columnType: _i2.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _i2.ColumnDefinition(
+          name: 'remainingMs',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: true,
+          dartType: 'int?',
+        ),
       ],
       foreignKeys: [],
       indexes: [
@@ -292,6 +306,91 @@ class Protocol extends _i1.SerializationManagerServer {
       ],
       managed: true,
     ),
+    _i2.TableDefinition(
+      name: 'target_image',
+      dartName: 'TargetImage',
+      schema: 'public',
+      module: 'draw_together_serverpod',
+      columns: [
+        _i2.ColumnDefinition(
+          name: 'id',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int?',
+          columnDefault: 'nextval(\'target_image_id_seq\'::regclass)',
+        ),
+        _i2.ColumnDefinition(
+          name: 'roomId',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _i2.ColumnDefinition(
+          name: 'playerId',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: true,
+          dartType: 'int?',
+        ),
+        _i2.ColumnDefinition(
+          name: 'bytes',
+          columnType: _i2.ColumnType.bytea,
+          isNullable: false,
+          dartType: 'dart:typed_data:ByteData',
+        ),
+        _i2.ColumnDefinition(
+          name: 'mimeType',
+          columnType: _i2.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _i2.ColumnDefinition(
+          name: 'width',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _i2.ColumnDefinition(
+          name: 'height',
+          columnType: _i2.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+      ],
+      foreignKeys: [],
+      indexes: [
+        _i2.IndexDefinition(
+          indexName: 'target_image_pkey',
+          tableSpace: null,
+          elements: [
+            _i2.IndexElementDefinition(
+              type: _i2.IndexElementDefinitionType.column,
+              definition: 'id',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: true,
+        ),
+        _i2.IndexDefinition(
+          indexName: 'target_image_room_player_idx',
+          tableSpace: null,
+          elements: [
+            _i2.IndexElementDefinition(
+              type: _i2.IndexElementDefinitionType.column,
+              definition: 'roomId',
+            ),
+            _i2.IndexElementDefinition(
+              type: _i2.IndexElementDefinitionType.column,
+              definition: 'playerId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
     ..._i3.Protocol.targetTableDefinitions,
     ..._i4.Protocol.targetTableDefinitions,
     ..._i2.Protocol.targetTableDefinitions,
@@ -354,6 +453,9 @@ class Protocol extends _i1.SerializationManagerServer {
     if (t == _i14.StrokeUndoMsg) {
       return _i14.StrokeUndoMsg.fromJson(data) as T;
     }
+    if (t == _i15.TargetImage) {
+      return _i15.TargetImage.fromJson(data) as T;
+    }
     if (t == _i1.getType<_i5.FinalCanvasMsg?>()) {
       return (data != null ? _i5.FinalCanvasMsg.fromJson(data) : null) as T;
     }
@@ -387,11 +489,14 @@ class Protocol extends _i1.SerializationManagerServer {
     if (t == _i1.getType<_i14.StrokeUndoMsg?>()) {
       return (data != null ? _i14.StrokeUndoMsg.fromJson(data) : null) as T;
     }
+    if (t == _i1.getType<_i15.TargetImage?>()) {
+      return (data != null ? _i15.TargetImage.fromJson(data) : null) as T;
+    }
     if (t == List<double>) {
       return (data as List).map((e) => deserialize<double>(e)).toList() as T;
     }
-    if (t == List<_i15.Player>) {
-      return (data as List).map((e) => deserialize<_i15.Player>(e)).toList()
+    if (t == List<_i16.Player>) {
+      return (data as List).map((e) => deserialize<_i16.Player>(e)).toList()
           as T;
     }
     try {
@@ -419,6 +524,7 @@ class Protocol extends _i1.SerializationManagerServer {
       _i12.Stroke => 'Stroke',
       _i13.StrokeSyncMsg => 'StrokeSyncMsg',
       _i14.StrokeUndoMsg => 'StrokeUndoMsg',
+      _i15.TargetImage => 'TargetImage',
       _ => null,
     };
   }
@@ -456,6 +562,8 @@ class Protocol extends _i1.SerializationManagerServer {
         return 'StrokeSyncMsg';
       case _i14.StrokeUndoMsg():
         return 'StrokeUndoMsg';
+      case _i15.TargetImage():
+        return 'TargetImage';
     }
     className = _i2.Protocol().getClassNameForObject(data);
     if (className != null) {
@@ -508,6 +616,9 @@ class Protocol extends _i1.SerializationManagerServer {
     if (dataClassName == 'StrokeUndoMsg') {
       return deserialize<_i14.StrokeUndoMsg>(data['data']);
     }
+    if (dataClassName == 'TargetImage') {
+      return deserialize<_i15.TargetImage>(data['data']);
+    }
     if (dataClassName.startsWith('serverpod.')) {
       data['className'] = dataClassName.substring(10);
       return _i2.Protocol().deserializeByClassName(data);
@@ -550,6 +661,8 @@ class Protocol extends _i1.SerializationManagerServer {
         return _i10.Room.t;
       case _i12.Stroke:
         return _i12.Stroke.t;
+      case _i15.TargetImage:
+        return _i15.TargetImage.t;
     }
     return null;
   }

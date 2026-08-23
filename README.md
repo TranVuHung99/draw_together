@@ -5,10 +5,17 @@ player gets their own rectangular slice of a shared canvas and draws freely insi
 timer runs out the regions become one composite picture.
 
 - A player creates a room and becomes the **host**; others join with a six-character room code.
+- The host uploads a **target image** — the thing everyone is collectively drawing — and picks how
+  long the round runs.
 - Starting the game partitions the canvas into a grid and assigns each drawing player one region.
-- The host observes the whole canvas live and does not draw.
+- Each drawing player is sent **only the crop of the target for their own region**, as a reference
+  thumbnail. Nobody but the host sees the whole picture until the round is over.
+- The host observes the whole canvas live, does not draw, and can see which region belongs to whom.
 - Strokes sync in real time, incrementally — the canvas is never resent wholesale.
-- When the server's deadline passes, drawing locks and everyone receives the final artwork.
+- The host can **pause**, **resume**, or **stop the round early**; pausing freezes the clock and
+  locks every canvas.
+- When the deadline passes — or the host stops early — drawing locks and everyone receives the final
+  artwork, shown beside the target it was aiming at.
 
 ## Stack
 
@@ -33,6 +40,7 @@ draw_together_serverpod/
     lib/src/models/*.spy.yaml             model definitions; `serverpod generate` builds from these
     lib/src/endpoints/                    room endpoint + the streaming endpoint
     lib/src/composition/canvas_svg.dart   builds the final composite as SVG
+    lib/src/composition/                  target_image_slicer.dart normalizes and crops the target
     lib/src/future_calls/                 the server-owned game deadline
     migrations/                           generated SQL migrations
   draw_together_serverpod_client/         generated client package, consumed by the Flutter app
@@ -62,6 +70,29 @@ client that subscribes, so the canvas survives a disconnect — including the ho
 server-verified deletion of the player's own most recent stroke, broadcast to everyone including
 the requester. The end of the game is a scheduled server-side future call: it flips the room to
 `FINISHED`, generates the composite, and broadcasts it. Client countdowns are display-only.
+
+**The room row, not the schedule, decides when the game is over.** A room runs
+`WAITING → PLAYING → FINISHED`, with `PLAYING ↔ PAUSED` in between. Pausing banks the time left,
+clears the deadline and cancels the scheduled call; resuming reschedules from the bank, so total
+drawing time survives a pause of any length. A scheduled call that fires anyway re-reads the room:
+it finalizes only from `PLAYING` with a deadline that has passed, reschedules itself if the deadline
+has moved later, and otherwise does nothing. Stopping early takes that same finalize path with only
+the "has the clock run out" check waived, so a host-ended game and an expired one are identical in
+their outcome. While a room is `PAUSED` the server refuses stroke and undo writes, in-progress
+batches included.
+
+**The target is sliced by the server, and never broadcast.** An upload is centre-cropped to the
+room's canvas aspect, bounded to 1024px on its longer edge and re-encoded as PNG before it is
+stored, so region → pixel rect is an unconditional multiply everywhere downstream. On start the
+server cuts one crop per drawing player and stores it against its owner. A crop is fetched by
+endpoint call rather than sent on the room channel — that channel is a broadcast, so a per-player
+payload posted there would reach everyone, which is exactly what cropping exists to prevent.
+
+**Non-artwork layers stay out of the artwork.** The reference thumbnail and the host's region
+ownership overlay are siblings of the canvas widget, not layers inside its painter. The painter's
+output is what the server's SVG mirrors, so anything drawn there would have to appear in the
+composite and in an export; keeping the thumbnail out of that subtree also keeps it out of the
+canvas's hit-testing, so a drag across it can never start a stroke.
 
 **The final artifact is an SVG.** The stroke model maps onto SVG one-to-one, so the server builds
 the composite as a string — one `<g clip-path>` per player, a `<polyline>` per stroke, a `<mask>`
@@ -94,7 +125,8 @@ flutter run -d chrome
 ```
 
 To play, open several browser windows: create a room in one, join it by code from the others, then
-start the game from the host window. The host observes; everyone else draws.
+optionally choose a target image, pick a round length, and start the game from the host window. The
+host observes and runs the session; everyone else draws.
 
 ### After changing a model or an endpoint
 
@@ -111,7 +143,8 @@ dart bin/main.dart --role maintenance --apply-migrations
 ### Tests
 
 Integration tests run against the test database on port 9090 and cover stroke persistence, replay,
-undo ownership rules, the room state machine, and SVG generation:
+undo ownership rules, the room state machine, host authorization, pause/resume/stop, target upload
+validation and per-region crop geometry, and SVG generation:
 
 ```bash
 cd draw_together_serverpod/draw_together_serverpod_server
@@ -126,8 +159,12 @@ Deliberately out of scope for a playable core, and worth knowing before extendin
 - **No reconnect after a page refresh.** The server replays a room's strokes to any client that
   subscribes, but the client keeps no record of which room and player it was, so refreshing a tab
   returns to the lobby with no way back in.
-- **No authentication or host authorization.** `startGame` is callable by anyone who knows the room
-  id.
+- **No authentication.** Session commands — `startGame`, `pauseGame`, `resumeGame`, `stopGame`, and
+  the target upload — are host-checked: the caller passes a `playerId` and the server refuses the
+  command unless it matches the room's `hostId`. That check is an identity assertion over an
+  unverified id, not a credential, so someone who knows both a room id and its host's player id can
+  still drive the session. Likewise, `getTargetImagePart` returns the whole target only to the host,
+  but a guessed `playerId` yields that player's own crop.
 - **Room codes can collide.** They are random and never checked for uniqueness.
 - **Single server only.** Room fan-out uses Serverpod's in-process message central; multi-server
   operation would need Redis.

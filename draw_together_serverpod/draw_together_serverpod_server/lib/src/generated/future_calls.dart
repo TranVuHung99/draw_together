@@ -122,8 +122,14 @@ class _GameEndFutureCallDispatcher {
 
   final _InvokeFutureCall _invokeFutureCall;
 
-  Future<void> finalizeRoom(int roomId) {
-    var object = _i2.GameEndFutureCallFinalizeRoomModel(roomId: roomId);
+  Future<void> finalizeRoom(
+    int roomId, {
+    bool ignoreDeadline = false,
+  }) {
+    var object = _i2.GameEndFutureCallFinalizeRoomModel(
+      roomId: roomId,
+      ignoreDeadline: ignoreDeadline,
+    );
     return _invokeFutureCall(
       'GameEndFinalizeRoomFutureCall',
       object,
@@ -136,6 +142,13 @@ class _GameEndFutureCallDispatcher {
 /// The status is written and broadcast before the strokes are read, which is
 /// what stops a stroke or an undo from landing while the composite is being
 /// built.
+///
+/// [ignoreDeadline] waives the "has the clock run out" question, and only
+/// that question: with it set, a room that is `PAUSED` — and so has no
+/// deadline at all — finalizes too. It is what a host stopping early
+/// asserts, and it is the reason a stopped game and an expired one are the
+/// same code path rather than two implementations that have to be kept
+/// agreeing. A scheduled call never sets it.
 class GameEndFinalizeRoomFutureCall
     extends _i1.FutureCall<_i2.GameEndFutureCallFinalizeRoomModel> {
   @override
@@ -147,6 +160,7 @@ class GameEndFinalizeRoomFutureCall
       await _i4.GameEndFutureCall().finalizeRoom(
         session,
         object.roomId,
+        ignoreDeadline: object.ignoreDeadline,
       );
     }
   }

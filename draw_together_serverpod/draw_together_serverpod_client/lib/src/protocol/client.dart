@@ -18,9 +18,12 @@ import 'package:serverpod_auth_core_client/serverpod_auth_core_client.dart'
     as _i4;
 import 'package:draw_together_serverpod_client/src/protocol/room.dart' as _i5;
 import 'package:draw_together_serverpod_client/src/protocol/player.dart' as _i6;
-import 'package:draw_together_serverpod_client/src/protocol/greetings/greeting.dart'
+import 'package:draw_together_serverpod_client/src/protocol/target_image.dart'
     as _i7;
-import 'protocol.dart' as _i8;
+import 'dart:typed_data' as _i8;
+import 'package:draw_together_serverpod_client/src/protocol/greetings/greeting.dart'
+    as _i9;
+import 'protocol.dart' as _i10;
 
 /// By extending [EmailIdpBaseEndpoint], the email identity provider endpoints
 /// are made available on the server and enable the corresponding sign-in widget
@@ -306,15 +309,116 @@ class EndpointRoom extends _i2.EndpointRef {
   );
 
   /// Start the game: partition canvas and update states
+  ///
+  /// Host-only, and only from `WAITING`. The duration is the host's choice
+  /// rather than a constant, so it is checked against the supported range here
+  /// — the client's picker is a convenience, not the boundary.
   _i3.Future<bool> startGame(
     int roomId,
+    int playerId,
     int durationSeconds,
   ) => caller.callServerEndpoint<bool>(
     'room',
     'startGame',
     {
       'roomId': roomId,
+      'playerId': playerId,
       'durationSeconds': durationSeconds,
+    },
+  );
+
+  /// Freezes a running game: the clock stops and no stroke can be written.
+  ///
+  /// The remainder is banked rather than a running total of paused time, so
+  /// the room row answers "how long is left" directly in both states —
+  /// `endTime` while playing, `remainingMs` while paused — and the countdown
+  /// has exactly two cases. Clearing `endTime` is what makes "an endTime is a
+  /// live deadline" true unconditionally, so nothing can schedule against, or
+  /// count down to, a suspended one.
+  _i3.Future<bool> pauseGame(
+    int roomId,
+    int playerId,
+  ) => caller.callServerEndpoint<bool>(
+    'room',
+    'pauseGame',
+    {
+      'roomId': roomId,
+      'playerId': playerId,
+    },
+  );
+
+  /// Restarts a paused game from the moment it was frozen.
+  ///
+  /// The new deadline is the banked remainder from now, so total drawing time
+  /// is preserved exactly however long the pause lasted; only the round's
+  /// wall-clock length grows.
+  _i3.Future<bool> resumeGame(
+    int roomId,
+    int playerId,
+  ) => caller.callServerEndpoint<bool>(
+    'room',
+    'resumeGame',
+    {
+      'roomId': roomId,
+      'playerId': playerId,
+    },
+  );
+
+  /// Ends a running or paused game now.
+  ///
+  /// This takes the deadline's own path with the "has the clock run out" check
+  /// waived, so a game the host ended and one that ran out are byte-identical
+  /// in their outcome: same status write, same broadcast order, same
+  /// composite.
+  _i3.Future<bool> stopGame(
+    int roomId,
+    int playerId,
+  ) => caller.callServerEndpoint<bool>(
+    'room',
+    'stopGame',
+    {
+      'roomId': roomId,
+      'playerId': playerId,
+    },
+  );
+
+  /// The image this player is entitled to see: the whole target for the host,
+  /// that player's own crop for a drawing player, and nothing for anyone else.
+  ///
+  /// This is a request/response call rather than a channel message on purpose.
+  /// `room_<id>` is a broadcast, so a crop posted there would reach every
+  /// subscriber, which is precisely what cropping exists to prevent.
+  _i3.Future<_i7.TargetImage?> getTargetImagePart(
+    int roomId,
+    int playerId,
+  ) => caller.callServerEndpoint<_i7.TargetImage?>(
+    'room',
+    'getTargetImagePart',
+    {
+      'roomId': roomId,
+      'playerId': playerId,
+    },
+  );
+
+  /// Stores the picture the room is collectively drawing.
+  ///
+  /// Host-only, and only while the room is still `WAITING`: the crops are cut
+  /// from this image when the game starts, so changing it afterwards would
+  /// leave every player's reference disagreeing with the target. The upload is
+  /// normalized to the room's canvas aspect and re-encoded as PNG before it is
+  /// stored, and a room holds at most one target, so this replaces whatever
+  /// was there.
+  _i3.Future<bool> uploadTargetImage(
+    int roomId,
+    int playerId,
+    _i8.ByteData bytes,
+  ) => caller.callServerEndpoint<bool>(
+    'room',
+    'uploadTargetImage',
+    {
+      'roomId': roomId,
+      'playerId': playerId,
+      'bytes': bytes,
     },
   );
 
@@ -353,8 +457,8 @@ class EndpointGreeting extends _i2.EndpointRef {
   String get name => 'greeting';
 
   /// Returns a personalized greeting message: "Hello {name}".
-  _i3.Future<_i7.Greeting> hello(String name) =>
-      caller.callServerEndpoint<_i7.Greeting>(
+  _i3.Future<_i9.Greeting> hello(String name) =>
+      caller.callServerEndpoint<_i9.Greeting>(
         'greeting',
         'hello',
         {'name': name},
@@ -392,7 +496,7 @@ class Client extends _i2.ServerpodClientShared {
     bool? disconnectStreamsOnLostInternetConnection,
   }) : super(
          host,
-         _i8.Protocol(),
+         _i10.Protocol(),
          securityContext: securityContext,
          streamingConnectionTimeout: streamingConnectionTimeout,
          connectionTimeout: connectionTimeout,

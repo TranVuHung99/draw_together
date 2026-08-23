@@ -2,4 +2,10 @@ class: GameStateChangeMsg
 fields:
   roomId: int
   status: String
+  # The live deadline while PLAYING, and null while PAUSED — the deadline is
+  # cancelled on pause, so there is none to announce.
   endTime: DateTime?
+  # The banked remainder, carried on a PAUSED change so a client can freeze its
+  # countdown at the right number without asking for the room row. Null in
+  # every other state, where endTime is the answer instead.
+  remainingMs: int?

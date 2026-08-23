@@ -1,0 +1,19 @@
+class: TargetImage
+table: target_image
+fields:
+  roomId: int
+  # Null identifies the room's normalized original — the whole picture, as
+  # stored on upload. A non-null value identifies one drawing player's crop of
+  # it, computed from that player's assigned region when the game starts.
+  playerId: int?
+  # PNG bytes. Every stored row is re-encoded on receipt, so the format is
+  # uniform whatever was uploaded.
+  bytes: ByteData
+  mimeType: String
+  # The pixel dimensions of `bytes`, so a client can size the reference without
+  # decoding it first.
+  width: int
+  height: int
+indexes:
+  target_image_room_player_idx:
+    fields: roomId, playerId

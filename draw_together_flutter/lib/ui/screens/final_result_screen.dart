@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/png_download.dart';
 import '../../providers/game_providers.dart';
+import '../../providers/controllers/target_image_controller.dart';
 import 'lobby_screen.dart';
 
 /// Shows the composite the server generated, as the SVG document it sent.
@@ -21,9 +22,23 @@ class _FinalResultScreenState extends ConsumerState<FinalResultScreen> {
   bool _exporting = false;
 
   @override
+  void initState() {
+    super.initState();
+    // A drawing player only ever held their own crop, so the reveal is a fresh
+    // fetch of the full image rather than something already on this client.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(targetImageControllerProvider).loadReveal();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final svg = ref.watch(finalCanvasSvgProvider);
     final room = ref.watch(roomProvider);
+    // Null when the room had no target, or when the reveal could not be
+    // fetched — either way the composite is shown alone.
+    final target = ref.watch(revealedTargetProvider);
 
     // The SVG is authored in a unit square, so the room's canvas size is what
     // gives it back its shape — the same mapping the live canvas used.
@@ -42,15 +57,34 @@ class _FinalResultScreenState extends ConsumerState<FinalResultScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (svg != null)
+              // The target beside what everyone made of it. A room that had
+              // none — or a reveal that could not be fetched — simply shows
+              // the composite alone, which is the whole screen as it was.
               Flexible(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: aspectRatio,
-                    child: SvgPicture.string(svg, fit: BoxFit.fill),
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: 24,
+                  children: [
+                    Flexible(
+                      child: _labelled(
+                        'The canvas',
+                        AspectRatio(
+                          aspectRatio: aspectRatio,
+                          child: SvgPicture.string(svg, fit: BoxFit.fill),
+                        ),
+                      ),
+                    ),
+                    if (target != null)
+                      Flexible(
+                        child: _labelled(
+                          'The target',
+                          AspectRatio(
+                            aspectRatio: aspectRatio,
+                            child: Image.memory(target, fit: BoxFit.fill),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               )
             else
@@ -85,8 +119,26 @@ class _FinalResultScreenState extends ConsumerState<FinalResultScreen> {
     );
   }
 
-  /// Rasterizes the SVG at the room's configured canvas resolution. This is
-  /// the only place a PNG is ever produced.
+  Widget _labelled(String label, Widget child) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(label, style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: 8),
+      Flexible(
+        child: Container(
+          decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
+          child: child,
+        ),
+      ),
+    ],
+  );
+
+  /// Rasterizes the SVG at the room's configured canvas resolution.
+  ///
+  /// This rasterizes the composite document alone — never the widget tree — so
+  /// the export contains only strokes: no overlay borders, no owner names, and
+  /// no part of the reference image. This is the only place a PNG is ever
+  /// produced.
   Future<void> _exportPng(String svg, Size canvasSize) async {
     setState(() => _exporting = true);
     try {
@@ -140,6 +192,8 @@ class _FinalResultScreenState extends ConsumerState<FinalResultScreen> {
     // Clear state
     ref.read(strokesProvider.notifier).clear();
     ref.read(finalCanvasSvgProvider.notifier).set(null);
+    ref.read(targetImageProvider.notifier).clear();
+    ref.read(revealedTargetProvider.notifier).set(null);
     ref.read(roomProvider.notifier).set(null);
     ref.read(currentPlayerProvider.notifier).set(null);
     ref.read(playersProvider.notifier).set([]);

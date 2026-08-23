@@ -52,7 +52,9 @@ class GameStreamingEndpoint extends Endpoint {
       // cached before this moment stale.
       if (message is GameStateChangeMsg) {
         if (message.status == 'PLAYING') regionLoaded = false;
-        if (message.status == 'PLAYING' || message.status == 'FINISHED') {
+        // PLAYER_JOINED is a refresh signal rather than a room status, so it
+        // is the one state change that must not be written down as one.
+        if (message.status != 'PLAYER_JOINED') {
           roomStatus = message.status;
         }
       }
@@ -196,9 +198,12 @@ class GameStreamingEndpoint extends Endpoint {
         return;
       }
 
-      // Once the game is over the canvas is closed: nothing is written and
-      // nothing is rebroadcast.
-      if (roomStatus == 'FINISHED') return;
+      // The canvas is open only while the game is running. Stating it as
+      // "accept only when PLAYING" rather than "refuse when FINISHED" covers
+      // WAITING and PAUSED in the same rule, and it applies to the ephemeral
+      // `start` and `update` batches too, so a paused game leaves no partial
+      // stroke on anyone else's screen.
+      if (roomStatus != 'PLAYING') return;
 
       if (!regionLoaded) await loadRegion();
       final playerRegion = region;
@@ -211,10 +216,11 @@ class GameStreamingEndpoint extends Endpoint {
 
       if (message.action == 'end') {
         // `start` and `update` are purely ephemeral: an in-progress stroke
-        // interrupted by a disconnect is not worth a row.
+        // interrupted by a disconnect is not worth a row. A completed one is,
+        // so its write re-reads the room rather than trusting the cache.
         final room = await Room.db.findById(session, currentRoomId);
         roomStatus = room?.status;
-        if (room == null || room.status == 'FINISHED') return;
+        if (room == null || room.status != 'PLAYING') return;
         await persist(clamped);
       }
 
@@ -234,9 +240,11 @@ class GameStreamingEndpoint extends Endpoint {
         return;
       }
 
+      // An undo is a write like any other, so it is held to the same rule: it
+      // is accepted only while the game is running.
       final room = await Room.db.findById(session, currentRoomId);
       roomStatus = room?.status;
-      if (room == null || room.status == 'FINISHED') return;
+      if (room == null || room.status != 'PLAYING') return;
 
       // Ownership is decided by the stored row, never by the request: this
       // reads the requesting player's own latest stroke and refuses unless the

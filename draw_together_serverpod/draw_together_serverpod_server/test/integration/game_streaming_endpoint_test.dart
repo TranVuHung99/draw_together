@@ -1,55 +1,15 @@
-import 'dart:async';
-
 import 'package:draw_together_serverpod_server/src/composition/canvas_svg.dart';
 import 'package:draw_together_serverpod_server/src/generated/protocol.dart';
 import 'package:serverpod/serverpod.dart';
 import 'package:test/test.dart';
 
+import 'streaming_harness.dart';
 import 'test_tools/serverpod_test_tools.dart';
-
-/// One connected client: what it sent, and what the server sent back.
-class _Connection {
-  final StreamController<SerializableModel> outgoing =
-      StreamController<SerializableModel>();
-  final List<SerializableModel> received = [];
-  late final StreamSubscription<SerializableModel> subscription;
-
-  List<StrokeSyncMsg> get strokes => received.whereType<StrokeSyncMsg>().toList();
-  List<StrokeUndoMsg> get undos => received.whereType<StrokeUndoMsg>().toList();
-
-  Future<void> close() async {
-    await outgoing.close();
-    await subscription.cancel();
-  }
-}
-
-/// Lets the endpoint's message queue and the pub/sub channel settle.
-Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 150));
-
-StrokeSyncMsg strokeMsg({
-  required int roomId,
-  required int playerId,
-  required String strokeId,
-  required String action,
-  required List<double> points,
-  String colorInfo = '0xFFFF0000',
-  double strokeWidth = 0.005,
-  bool isEraser = false,
-}) => StrokeSyncMsg(
-  roomId: roomId,
-  playerId: playerId,
-  strokeId: strokeId,
-  action: action,
-  points: points,
-  colorInfo: colorInfo,
-  strokeWidth: strokeWidth,
-  isEraser: isEraser,
-  timestamp: DateTime.now(),
-);
 
 void main() {
   withServerpod('Given a room being played', (sessionBuilder, endpoints) {
     late Session session;
+    late RoomClients clients;
     late Room room;
     late Player host;
     late Player alice;
@@ -106,51 +66,9 @@ void main() {
           endTime: DateTime.now().add(const Duration(minutes: 5)),
         ),
       );
+
+      clients = RoomClients(endpoints, sessionBuilder, room.id!);
     });
-
-    Future<_Connection> connect(int playerId) async {
-      final connection = _Connection();
-      connection.subscription = endpoints.gameStreaming
-          .live(sessionBuilder, connection.outgoing.stream)
-          .listen(connection.received.add);
-      connection.outgoing.add(
-        RoomSubscribeMsg(roomId: room.id!, playerId: playerId),
-      );
-      await settle();
-      return connection;
-    }
-
-    /// Draws one complete stroke on [connection] and returns its id.
-    Future<String> draw(
-      _Connection connection,
-      int playerId,
-      String strokeId,
-      List<double> points, {
-      bool isEraser = false,
-    }) async {
-      connection.outgoing.add(
-        strokeMsg(
-          roomId: room.id!,
-          playerId: playerId,
-          strokeId: strokeId,
-          action: 'start',
-          points: points.take(2).toList(),
-          isEraser: isEraser,
-        ),
-      );
-      connection.outgoing.add(
-        strokeMsg(
-          roomId: room.id!,
-          playerId: playerId,
-          strokeId: strokeId,
-          action: 'end',
-          points: points,
-          isEraser: isEraser,
-        ),
-      );
-      await settle();
-      return strokeId;
-    }
 
     Future<List<Stroke>> storedStrokes() => Stroke.db.find(
       session,
@@ -159,8 +77,8 @@ void main() {
     );
 
     test('when a stroke completes then exactly one row is written', () async {
-      final connection = await connect(alice.id!);
-      await draw(connection, alice.id!, 'stroke-a', [0.1, 0.1, 0.2, 0.2]);
+      final connection = await clients.connect(alice.id!);
+      await clients.draw(connection, alice.id!, 'stroke-a', [0.1, 0.1, 0.2, 0.2]);
 
       final stored = await storedStrokes();
       expect(stored, hasLength(1));
@@ -173,7 +91,7 @@ void main() {
     });
 
     test('when only start and update arrive then nothing is written', () async {
-      final connection = await connect(alice.id!);
+      final connection = await clients.connect(alice.id!);
       connection.outgoing.add(
         strokeMsg(
           roomId: room.id!,
@@ -199,8 +117,8 @@ void main() {
     });
 
     test('when an end message is duplicated then it writes once', () async {
-      final connection = await connect(alice.id!);
-      await draw(connection, alice.id!, 'stroke-a', [0.1, 0.1, 0.2, 0.2]);
+      final connection = await clients.connect(alice.id!);
+      await clients.draw(connection, alice.id!, 'stroke-a', [0.1, 0.1, 0.2, 0.2]);
       connection.outgoing.add(
         strokeMsg(
           roomId: room.id!,
@@ -217,12 +135,12 @@ void main() {
     });
 
     test('when strokes complete then sequence increases per room', () async {
-      final aliceConnection = await connect(alice.id!);
-      final bobConnection = await connect(bob.id!);
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
 
-      await draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
-      await draw(bobConnection, bob.id!, 'b1', [0.6, 0.1, 0.7, 0.2]);
-      await draw(aliceConnection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
+      await clients.draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      await clients.draw(bobConnection, bob.id!, 'b1', [0.6, 0.1, 0.7, 0.2]);
+      await clients.draw(aliceConnection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
 
       final stored = await storedStrokes();
       expect(stored.map((s) => s.strokeId), ['a1', 'b1', 'a2']);
@@ -237,19 +155,19 @@ void main() {
     });
 
     test('when a client subscribes then stored strokes are replayed', () async {
-      final aliceConnection = await connect(alice.id!);
-      await draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
-      await draw(aliceConnection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
+      final aliceConnection = await clients.connect(alice.id!);
+      await clients.draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      await clients.draw(aliceConnection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
 
       // A reconnecting player gets their own strokes back, notwithstanding
       // echo suppression.
-      final reconnected = await connect(alice.id!);
+      final reconnected = await clients.connect(alice.id!);
       expect(reconnected.strokes.map((s) => s.strokeId), ['a1', 'a2']);
       expect(reconnected.strokes.every((s) => s.action == 'end'), isTrue);
       expect(reconnected.strokes.first.points, [0.1, 0.1, 0.2, 0.2]);
 
       // A late joiner sees the same canvas.
-      final late = await connect(bob.id!);
+      final late = await clients.connect(bob.id!);
       expect(late.strokes.map((s) => s.strokeId), ['a1', 'a2']);
 
       await aliceConnection.close();
@@ -258,16 +176,16 @@ void main() {
     });
 
     test('when a room has no strokes then nothing is replayed', () async {
-      final connection = await connect(alice.id!);
+      final connection = await clients.connect(alice.id!);
       expect(connection.received, isEmpty);
       await connection.close();
     });
 
     test('when a stroke is live then its sender does not receive it', () async {
-      final aliceConnection = await connect(alice.id!);
-      final bobConnection = await connect(bob.id!);
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
 
-      await draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      await clients.draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
 
       expect(aliceConnection.strokes, isEmpty);
       expect(bobConnection.strokes.map((s) => s.strokeId), ['a1', 'a1']);
@@ -278,10 +196,10 @@ void main() {
 
     test('when a player undoes their latest then it is deleted and '
         'broadcast to everyone', () async {
-      final aliceConnection = await connect(alice.id!);
-      final bobConnection = await connect(bob.id!);
-      await draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
-      await draw(aliceConnection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
+      await clients.draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      await clients.draw(aliceConnection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
 
       aliceConnection.outgoing.add(
         StrokeUndoMsg(
@@ -304,9 +222,9 @@ void main() {
 
     test('when an undo names another player\'s stroke then nothing '
         'is deleted', () async {
-      final aliceConnection = await connect(alice.id!);
-      final bobConnection = await connect(bob.id!);
-      await draw(bobConnection, bob.id!, 'b1', [0.6, 0.1, 0.7, 0.2]);
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
+      await clients.draw(bobConnection, bob.id!, 'b1', [0.6, 0.1, 0.7, 0.2]);
 
       aliceConnection.outgoing.add(
         StrokeUndoMsg(
@@ -326,9 +244,9 @@ void main() {
     });
 
     test('when an undo names an older stroke then it is refused', () async {
-      final connection = await connect(alice.id!);
-      await draw(connection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
-      await draw(connection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
+      final connection = await clients.connect(alice.id!);
+      await clients.draw(connection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      await clients.draw(connection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
 
       connection.outgoing.add(
         StrokeUndoMsg(
@@ -346,7 +264,7 @@ void main() {
     });
 
     test('when a player has drawn nothing then undo is refused', () async {
-      final connection = await connect(alice.id!);
+      final connection = await clients.connect(alice.id!);
       connection.outgoing.add(
         StrokeUndoMsg(
           roomId: room.id!,
@@ -363,9 +281,9 @@ void main() {
 
     test('when an undo claims someone else\'s playerId then it is '
         'discarded', () async {
-      final aliceConnection = await connect(alice.id!);
-      final bobConnection = await connect(bob.id!);
-      await draw(bobConnection, bob.id!, 'b1', [0.6, 0.1, 0.7, 0.2]);
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
+      await clients.draw(bobConnection, bob.id!, 'b1', [0.6, 0.1, 0.7, 0.2]);
 
       // Alice's connection, claiming to be Bob.
       aliceConnection.outgoing.add(
@@ -380,12 +298,12 @@ void main() {
 
     test('when the room is finished then strokes and undos are '
         'refused', () async {
-      final connection = await connect(alice.id!);
-      await draw(connection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      final connection = await clients.connect(alice.id!);
+      await clients.draw(connection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
 
       await Room.db.updateRow(session, room.copyWith(status: 'FINISHED'));
 
-      await draw(connection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
+      await clients.draw(connection, alice.id!, 'a2', [0.3, 0.3, 0.4, 0.4]);
       connection.outgoing.add(
         StrokeUndoMsg(roomId: room.id!, playerId: alice.id!, strokeId: 'a1'),
       );
@@ -398,9 +316,9 @@ void main() {
     });
 
     test('when a stroke leaves its region then it is clamped', () async {
-      final connection = await connect(alice.id!);
+      final connection = await clients.connect(alice.id!);
       // Alice's region is the left half; the second point is outside it.
-      await draw(connection, alice.id!, 'a1', [0.1, 0.1, 0.9, 0.2]);
+      await clients.draw(connection, alice.id!, 'a1', [0.1, 0.1, 0.9, 0.2]);
 
       final stored = await storedStrokes();
       expect(stored.single.points, [0.1, 0.1, 0.5, 0.2]);
@@ -408,8 +326,8 @@ void main() {
     });
 
     test('when the host sends a stroke then it is ignored', () async {
-      final connection = await connect(host.id!);
-      await draw(connection, host.id!, 'h1', [0.1, 0.1, 0.2, 0.2]);
+      final connection = await clients.connect(host.id!);
+      await clients.draw(connection, host.id!, 'h1', [0.1, 0.1, 0.2, 0.2]);
 
       expect(await storedStrokes(), isEmpty);
       await connection.close();
@@ -425,7 +343,15 @@ void main() {
         1000,
         1000,
       );
-      expect(await endpoints.room.startGame(sessionBuilder, room!.id!, 60), isFalse);
+      expect(
+        await endpoints.room.startGame(
+          sessionBuilder,
+          room!.id!,
+          room.hostId,
+          60,
+        ),
+        isFalse,
+      );
       final stored = await endpoints.room.getRoom(sessionBuilder, room.id!);
       expect(stored!.status, 'WAITING');
     });
@@ -441,11 +367,21 @@ void main() {
       await endpoints.room.joinRoom(sessionBuilder, room!.roomCode, 'alice');
 
       expect(
-        await endpoints.room.startGame(sessionBuilder, room.id!, 60),
+        await endpoints.room.startGame(
+          sessionBuilder,
+          room.id!,
+          room.hostId,
+          60,
+        ),
         isTrue,
       );
       expect(
-        await endpoints.room.startGame(sessionBuilder, room.id!, 60),
+        await endpoints.room.startGame(
+          sessionBuilder,
+          room.id!,
+          room.hostId,
+          60,
+        ),
         isFalse,
       );
       expect(

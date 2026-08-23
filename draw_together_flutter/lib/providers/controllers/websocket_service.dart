@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/serverpod_client.dart';
 import 'package:draw_together_serverpod_client/draw_together_serverpod_client.dart';
 import '../game_providers.dart';
+import 'target_image_controller.dart';
 
 final webSocketServiceProvider = Provider<WebSocketService>((ref) {
   final service = WebSocketService(ref);
@@ -64,15 +65,26 @@ class WebSocketService {
           // Easiest is to trigger a refresh via RoomController.
           _refreshPlayers(message.roomId);
         } else {
+          // `endTime` and `remainingMs` are each other's opposite — the server
+          // clears one as it sets the other — so both are applied from every
+          // change rather than only the one the new status happens to use.
           ref
               .read(roomProvider.notifier)
               .set(
-                room.copyWith(status: message.status, endTime: message.endTime),
+                room.copyWith(
+                  status: message.status,
+                  endTime: message.endTime,
+                  remainingMs: message.remainingMs,
+                ),
               );
           if (message.status == 'PLAYING') {
             // Regions are assigned as the game starts, so the local player and
             // the roster are both stale from this moment.
             _refreshPlayers(message.roomId);
+            // The crop is cut from the same regions, so it is fetched here
+            // too. A client that never sees this message fetches it on
+            // entering the game screen instead.
+            ref.read(targetImageControllerProvider).load();
           }
         }
       }

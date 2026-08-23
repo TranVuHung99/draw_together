@@ -15,6 +15,11 @@ room:
   - createRoom:
   - joinRoom:
   - startGame:
+  - pauseGame:
+  - resumeGame:
+  - stopGame:
+  - getTargetImagePart:
+  - uploadTargetImage:
   - getPlayer:
   - getRoom:
   - getPlayersInRoom:

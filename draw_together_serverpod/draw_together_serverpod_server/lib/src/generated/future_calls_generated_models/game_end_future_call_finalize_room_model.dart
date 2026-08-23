@@ -14,30 +14,42 @@ import 'package:serverpod/serverpod.dart' as _i1;
 
 abstract class GameEndFutureCallFinalizeRoomModel
     implements _i1.SerializableModel, _i1.ProtocolSerialization {
-  GameEndFutureCallFinalizeRoomModel._({required this.roomId});
+  GameEndFutureCallFinalizeRoomModel._({
+    required this.roomId,
+    required this.ignoreDeadline,
+  });
 
-  factory GameEndFutureCallFinalizeRoomModel({required int roomId}) =
-      _GameEndFutureCallFinalizeRoomModelImpl;
+  factory GameEndFutureCallFinalizeRoomModel({
+    required int roomId,
+    required bool ignoreDeadline,
+  }) = _GameEndFutureCallFinalizeRoomModelImpl;
 
   factory GameEndFutureCallFinalizeRoomModel.fromJson(
     Map<String, dynamic> jsonSerialization,
   ) {
     return GameEndFutureCallFinalizeRoomModel(
       roomId: jsonSerialization['roomId'] as int,
+      ignoreDeadline: jsonSerialization['ignoreDeadline'] as bool,
     );
   }
 
   int roomId;
 
+  bool ignoreDeadline;
+
   /// Returns a shallow copy of this [GameEndFutureCallFinalizeRoomModel]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
-  GameEndFutureCallFinalizeRoomModel copyWith({int? roomId});
+  GameEndFutureCallFinalizeRoomModel copyWith({
+    int? roomId,
+    bool? ignoreDeadline,
+  });
   @override
   Map<String, dynamic> toJson() {
     return {
       '__className__': 'GameEndFutureCallFinalizeRoomModel',
       'roomId': roomId,
+      'ignoreDeadline': ignoreDeadline,
     };
   }
 
@@ -54,14 +66,25 @@ abstract class GameEndFutureCallFinalizeRoomModel
 
 class _GameEndFutureCallFinalizeRoomModelImpl
     extends GameEndFutureCallFinalizeRoomModel {
-  _GameEndFutureCallFinalizeRoomModelImpl({required int roomId})
-    : super._(roomId: roomId);
+  _GameEndFutureCallFinalizeRoomModelImpl({
+    required int roomId,
+    required bool ignoreDeadline,
+  }) : super._(
+         roomId: roomId,
+         ignoreDeadline: ignoreDeadline,
+       );
 
   /// Returns a shallow copy of this [GameEndFutureCallFinalizeRoomModel]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
   @override
-  GameEndFutureCallFinalizeRoomModel copyWith({int? roomId}) {
-    return GameEndFutureCallFinalizeRoomModel(roomId: roomId ?? this.roomId);
+  GameEndFutureCallFinalizeRoomModel copyWith({
+    int? roomId,
+    bool? ignoreDeadline,
+  }) {
+    return GameEndFutureCallFinalizeRoomModel(
+      roomId: roomId ?? this.roomId,
+      ignoreDeadline: ignoreDeadline ?? this.ignoreDeadline,
+    );
   }
 }

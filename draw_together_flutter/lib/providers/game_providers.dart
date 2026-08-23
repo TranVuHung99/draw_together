@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // The generated `Stroke` is the server's table row; the canvas works with the
@@ -103,8 +104,11 @@ final playerRegionsProvider = Provider<Map<int, Rect>>((ref) {
 /// Whether drawing input is accepted. All three conditions fail independently:
 /// the host never has a region, a spectating player is not in draw mode, and
 /// everyone fails the status check before the game starts. The status check is
-/// also what locks the canvas once the game is `FINISHED`, in draw mode as
-/// much as in spectate mode.
+/// also what locks the canvas once the game is `FINISHED` or `PAUSED`, in draw
+/// mode as much as in spectate mode.
+///
+/// This is presentational. The server refuses writes outside `PLAYING` too,
+/// and that refusal is the enforcement.
 final canDrawProvider = Provider<bool>((ref) {
   final inDrawMode = !ref.watch(viewGlobalCanvasProvider);
   final hasRegion = ref.watch(localRegionProvider) != null;
@@ -112,12 +116,27 @@ final canDrawProvider = Provider<bool>((ref) {
   return inDrawMode && hasRegion && isPlaying;
 });
 
+/// Whether the game is frozen. Every client shows this, not just the host, so
+/// the state is never ambiguous to a player whose canvas has gone read-only.
+final isPausedProvider = Provider<bool>(
+  (ref) => ref.watch(roomProvider)?.status == 'PAUSED',
+);
+
 /// Seconds left on the server's deadline, or null when there is no deadline.
 ///
-/// Derived from `Room.endTime` so a client joining mid-game shows the time that
-/// is actually left. Purely presentational: nothing is finalized when it
-/// reaches zero.
+/// While `PLAYING` this is derived from `Room.endTime`, so a client joining
+/// mid-game shows the time that is actually left. While `PAUSED` there is no
+/// deadline to derive from — the server cancelled it — so it reads the banked
+/// remainder instead, and the display freezes without the ticker stopping.
+///
+/// Purely presentational either way: nothing is finalized when it reaches zero.
 int? remainingSeconds(Room? room) {
+  if (room?.status == 'PAUSED') {
+    final remainingMs = room?.remainingMs;
+    if (remainingMs == null) return null;
+    return remainingMs < 0 ? 0 : remainingMs ~/ 1000;
+  }
+
   final endTime = room?.endTime;
   if (endTime == null) return null;
   final seconds = endTime.difference(DateTime.now()).inSeconds;
@@ -208,6 +227,118 @@ final undoableStrokeProvider = Provider<Stroke?>((ref) {
   final playerId = ref.watch(currentPlayerProvider)?.id;
   if (playerId == null) return null;
   return ref.watch(strokesProvider).latestOf(playerId);
+});
+
+/// The reference this client is entitled to see: the host the whole target, a
+/// drawing player their own crop.
+///
+/// It is fetched by endpoint call rather than received on the room channel —
+/// the channel is a broadcast, so a per-player crop posted there would reach
+/// everyone. A failed fetch is a state of its own rather than an absent image,
+/// so the game stays playable and the thumbnail can offer a retry.
+class TargetImageState {
+  /// The PNG bytes, or null while loading, on failure, or when the room has no
+  /// target at all.
+  final Uint8List? bytes;
+  final bool loading;
+  final bool failed;
+
+  const TargetImageState({this.bytes, this.loading = false, this.failed = false});
+
+  /// Before any fetch has been attempted: no image, and nothing went wrong.
+  static const none = TargetImageState();
+
+  bool get hasImage => bytes != null;
+}
+
+class TargetImageNotifier extends Notifier<TargetImageState> {
+  @override
+  TargetImageState build() => TargetImageState.none;
+
+  void loading() => state = const TargetImageState(loading: true);
+  void failed() => state = const TargetImageState(failed: true);
+
+  /// A successful fetch. Null bytes mean the room simply has no target, which
+  /// is not a failure — the round plays exactly as it did before targets
+  /// existed.
+  void set(Uint8List? bytes) => state = TargetImageState(bytes: bytes);
+
+  void clear() => state = TargetImageState.none;
+}
+
+final targetImageProvider =
+    NotifierProvider<TargetImageNotifier, TargetImageState>(
+      TargetImageNotifier.new,
+    );
+
+/// The whole target, revealed on the result screen once the round is over.
+///
+/// Separate from [targetImageProvider] because they are different pictures for
+/// everyone but the host: a drawing player held only their own crop while
+/// playing, and this is the first time they see the rest.
+class RevealedTargetNotifier extends Notifier<Uint8List?> {
+  @override
+  Uint8List? build() => null;
+  void set(Uint8List? bytes) => state = bytes;
+}
+
+final revealedTargetProvider =
+    NotifierProvider<RevealedTargetNotifier, Uint8List?>(
+      RevealedTargetNotifier.new,
+    );
+
+/// One drawing player's region, as the host's ownership overlay labels it.
+class RegionOwner {
+  final Rect region;
+  final String name;
+  final Color color;
+
+  const RegionOwner({
+    required this.region,
+    required this.name,
+    required this.color,
+  });
+}
+
+/// Who owns which region, for the host's overlay. The host has no region of
+/// its own and so is absent, and a roster refresh rebuilds this rather than
+/// leaving stale rectangles on screen.
+final regionOwnersProvider = Provider<List<RegionOwner>>((ref) {
+  final owners = <RegionOwner>[];
+  for (final player in ref.watch(playersProvider)) {
+    final region = regionOf(player);
+    if (region == null) continue;
+    owners.add(
+      RegionOwner(
+        region: region,
+        name: player.name,
+        color: Color(int.tryParse(player.colorInfo ?? '') ?? 0xFF000000),
+      ),
+    );
+  }
+  return owners;
+});
+
+/// Whether the host has the ownership overlay switched on. It is only ever
+/// shown on the full canvas and only to the host; this is the toggle on top of
+/// those conditions.
+class ShowOwnershipNotifier extends Notifier<bool> {
+  @override
+  bool build() => true;
+  void toggle() => state = !state;
+}
+
+final showOwnershipProvider = NotifierProvider<ShowOwnershipNotifier, bool>(
+  ShowOwnershipNotifier.new,
+);
+
+/// Whether the ownership overlay is on screen: host-only, full-canvas only,
+/// and switched on. A spectating drawing player sees an anonymous canvas, so
+/// they cannot work out the whole picture from who is next to them.
+final showOwnershipOverlayProvider = Provider<bool>((ref) {
+  if (!ref.watch(isHostProvider)) return false;
+  if (!ref.watch(showOwnershipProvider)) return false;
+  return ref.watch(viewportRectProvider) == CanvasViewport.fullCanvas;
 });
 
 /// The final composite, as the SVG document the server generated. Null until

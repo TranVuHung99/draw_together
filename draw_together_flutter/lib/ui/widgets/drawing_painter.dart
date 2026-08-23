@@ -101,6 +101,84 @@ class DrawingPainter extends CustomPainter {
   }
 }
 
+/// Draws each drawing player's region as a labelled outline in that player's
+/// own colour, so the host can name the owner of any rectangle at a glance.
+///
+/// This is not artwork. It is painted above the composed canvas and outside
+/// [DrawingPainter]'s paint tree — whose output is what the server's SVG
+/// mirrors requirement for requirement — so it appears on screen and in
+/// neither the composite nor a PNG export.
+class RegionOwnershipPainter extends CustomPainter {
+  /// Each region in normalized canvas coordinates, with its owner's name and
+  /// colour.
+  final List<({Rect region, String name, Color color})> owners;
+  final CanvasViewport viewport;
+
+  RegionOwnershipPainter({required this.owners, required this.viewport});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(viewport.destination);
+
+    for (final owner in owners) {
+      final rect = viewport.toWidgetRect(owner.region);
+      canvas.drawRect(
+        rect.deflate(1),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..color = owner.color
+          ..strokeWidth = 2,
+      );
+
+      final label = TextPainter(
+        text: TextSpan(
+          text: owner.name,
+          style: TextStyle(
+            color: owner.color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: rect.width - 8);
+
+      // A chip behind the name, so it stays readable over whatever has been
+      // drawn underneath it.
+      final origin = Offset(rect.left + 4, rect.top + 4);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            origin.dx - 3,
+            origin.dy - 2,
+            label.width + 6,
+            label.height + 4,
+          ),
+          const Radius.circular(3),
+        ),
+        Paint()..color = Colors.white.withValues(alpha: 0.8),
+      );
+      label.paint(canvas, origin);
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant RegionOwnershipPainter oldDelegate) {
+    if (oldDelegate.viewport != viewport) return true;
+    if (oldDelegate.owners.length != owners.length) return true;
+    for (var i = 0; i < owners.length; i++) {
+      final a = oldDelegate.owners[i];
+      final b = owners[i];
+      if (a.region != b.region || a.name != b.name || a.color != b.color) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
 /// One player's region, as the full-canvas views outline it.
 class RegionOutline {
   /// The region in normalized canvas coordinates.
