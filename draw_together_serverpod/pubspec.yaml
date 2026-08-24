@@ -4,10 +4,12 @@ publish_to: none
 environment:
   sdk: '^3.8.0'
 
+# Only the pure-Dart packages belong to this workspace. The scaffold Flutter app
+# in draw_together_serverpod_flutter resolves on its own, because a workspace is
+# resolved as a single unit: including it would pull `sdk: flutter` packages into
+# the resolution and force the server's Docker image to carry a whole Flutter SDK
+# just to run `dart pub get`.
 workspace:
   - draw_together_serverpod_client
   - draw_together_serverpod_server
-  - draw_together_serverpod_flutter
-dependency_overrides:
-  flutter_secure_storage: ^10.0.0
 

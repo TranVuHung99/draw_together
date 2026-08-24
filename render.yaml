@@ -1,0 +1,158 @@
+# Render Blueprint for Draw Together.
+#
+# Three resources: a Postgres database, the Serverpod API server as a Docker web
+# service, and the Flutter web client as a static site.
+#
+# The API and the client are separate services because Serverpod's monolith role
+# binds three ports (8080 API, 8081 Insights, 8082 web server) and Render routes
+# external traffic to exactly one of them. The API is the port that matters, so
+# the Flutter app is served as a static site instead of from Serverpod's own web
+# server.
+#
+# Apply with: Render Dashboard -> New -> Blueprint, pointed at this repository.
+
+databases:
+  - name: draw-together-db
+    databaseName: draw_together
+    user: draw_together
+    postgresMajorVersion: "16"
+    # The free plan is deleted automatically 30 days after creation. Move to a
+    # paid plan before then if the deployment should outlive that.
+    plan: free
+    region: singapore
+
+services:
+  # ---------------------------------------------------------------------------
+  # Serverpod API server
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: draw-together-api
+    runtime: docker
+    region: singapore
+    # The free plan spins the instance down after 15 minutes idle. A cold start
+    # takes about a minute and drops every open WebSocket, which for a realtime
+    # drawing session means every player is disconnected mid-game. Use `starter`
+    # or above for anything you want to actually play on.
+    plan: free
+
+    # The build context is the pub workspace root, not the server package: both
+    # packages declare `resolution: workspace`, so pub cannot resolve them
+    # without the root pubspec.yaml, and the shared pubspec.lock is what pins the
+    # dependency versions the server compiles against.
+    rootDir: draw_together_serverpod
+    dockerfilePath: ./draw_together_serverpod_server/Dockerfile
+    dockerContext: .
+
+    # The API server answers 200 on / once it is up.
+    healthCheckPath: /
+
+    # Serverpod's in-process message bus is what fans a stroke out to the other
+    # players in a room, and it only reaches clients attached to the *same*
+    # instance (Redis, which would make it cross-instance, is disabled). Players
+    # on different instances would not see each other, so this must stay at one.
+    numInstances: 1
+
+    envVars:
+      # Serverpod binds 8080, 8081 and 8082. This tells Render which one to
+      # route public traffic to; without it the choice is ambiguous.
+      - key: PORT
+        value: 8080
+
+      # Database. These override the corresponding keys in
+      # config/production.yaml, whose $NAME placeholders are never expanded.
+      - key: SERVERPOD_DATABASE_HOST
+        fromDatabase:
+          name: draw-together-db
+          property: host
+      - key: SERVERPOD_DATABASE_PORT
+        fromDatabase:
+          name: draw-together-db
+          property: port
+      - key: SERVERPOD_DATABASE_NAME
+        fromDatabase:
+          name: draw-together-db
+          property: database
+      - key: SERVERPOD_DATABASE_USER
+        fromDatabase:
+          name: draw-together-db
+          property: user
+      - key: SERVERPOD_DATABASE_PASSWORD
+        fromDatabase:
+          name: draw-together-db
+          property: password
+      # Serverpod maps this to postgres SslMode.require, which encrypts without
+      # verifying the certificate chain, so Render's cert is accepted as is.
+      - key: SERVERPOD_DATABASE_REQUIRE_SSL
+        value: "true"
+
+      # Apply pending migrations on boot. Without this the schema is never
+      # created and every endpoint fails on its first query.
+      - key: SERVERPOD_APPLY_MIGRATIONS
+        value: "true"
+
+      # How the server describes itself in generated URLs. Update the host if
+      # the service is renamed or put behind a custom domain.
+      - key: SERVERPOD_API_SERVER_PUBLIC_HOST
+        value: draw-together-api.onrender.com
+      - key: SERVERPOD_API_SERVER_PUBLIC_PORT
+        value: "443"
+      - key: SERVERPOD_API_SERVER_PUBLIC_SCHEME
+        value: https
+
+      # Secrets. `generateValue` has Render mint each one once, on first deploy,
+      # and keep it stable afterwards — which matters for the JWT and hashing
+      # secrets, since changing them invalidates every issued token and every
+      # stored password hash.
+      #
+      # config/passwords.yaml is gitignored and therefore absent from the image;
+      # these SERVERPOD_PASSWORD_* variables are what server.dart's
+      # JwtConfigFromPasswords and EmailIdpConfigFromPasswords read instead.
+      # They are required at startup even though the game itself has no login.
+      - key: SERVERPOD_SERVICE_SECRET
+        generateValue: true
+      - key: SERVERPOD_PASSWORD_jwtHmacSha512PrivateKey
+        generateValue: true
+      - key: SERVERPOD_PASSWORD_jwtRefreshTokenHashPepper
+        generateValue: true
+      - key: SERVERPOD_PASSWORD_emailSecretHashPepper
+        generateValue: true
+
+  # ---------------------------------------------------------------------------
+  # Flutter web client
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: draw-together-web
+    runtime: static
+    rootDir: draw_together_flutter
+
+    # Render's static build image has no Flutter SDK, so the build fetches a
+    # pinned one. The version is pinned rather than tracking stable so that a
+    # Flutter release cannot break a deploy on its own.
+    buildCommand: |
+      set -e
+      FLUTTER_VERSION=3.38.3
+      if [ ! -d "$HOME/flutter" ]; then
+        git clone --depth 1 -b "$FLUTTER_VERSION" \
+          https://github.com/flutter/flutter.git "$HOME/flutter"
+      fi
+      git config --global --add safe.directory "$HOME/flutter"
+      export PATH="$HOME/flutter/bin:$PATH"
+      flutter --version
+      flutter build web --release --dart-define=SERVER_URL="$SERVER_URL"
+
+    staticPublishPath: build/web
+
+    envVars:
+      # Baked into the bundle at compile time by the --dart-define above. Without
+      # it lib/core/serverpod_client.dart falls back to deriving the API from the
+      # page's own URL as http://<host>:8080/, which is wrong on Render: the API
+      # is a different host, and it is https on 443.
+      - key: SERVER_URL
+        value: https://draw-together-api.onrender.com/
+
+    routes:
+      # Serve index.html for unknown paths so a deep link or a reload does not
+      # 404 against the static file tree.
+      - type: rewrite
+        source: /*
+        destination: /index.html

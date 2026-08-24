@@ -21,7 +21,10 @@ environment:
   sdk: '^3.8.0'
   flutter: '^3.32.0'
 
-resolution: workspace
+# Resolved standalone rather than as a member of the ../pubspec.yaml workspace,
+# so that the server's dependency resolution stays pure Dart. See that file.
+dependency_overrides:
+  flutter_secure_storage: ^10.0.0
 
 dependencies:
   # The following adds the Cupertino Icons font to your application.
