@@ -19,6 +19,13 @@ class StreamConnection {
       received.whereType<StrokeRejectedMsg>().toList();
   List<GameStateChangeMsg> get stateChanges =>
       received.whereType<GameStateChangeMsg>().toList();
+
+  /// The state changes that actually say where the room is. `PLAYER_JOINED` is
+  /// a signal to reload the roster rather than a room status — the endpoint
+  /// makes the same distinction when it decides what to cache — so it is not
+  /// one of these.
+  List<GameStateChangeMsg> get roomStates =>
+      stateChanges.where((m) => m.status != 'PLAYER_JOINED').toList();
   List<FinalCanvasMsg> get composites =>
       received.whereType<FinalCanvasMsg>().toList();
 

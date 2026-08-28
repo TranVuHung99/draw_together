@@ -470,8 +470,8 @@ void main() {
         // Room state first: a client should not paint a canvas before it knows
         // the rules the canvas is under.
         expect(connection.received.first, isA<GameStateChangeMsg>());
-        expect(connection.stateChanges.single.status, 'PLAYING');
-        expect(connection.stateChanges.single.endTime, isNotNull);
+        expect(connection.roomStates.single.status, 'PLAYING');
+        expect(connection.roomStates.single.endTime, isNotNull);
         expect(connection.strokes.map((s) => s.strokeId), ['a1']);
 
         await drawn.close();
@@ -488,11 +488,11 @@ void main() {
         // whose every stroke comes back refused.
         final connection = await clients.connect(alice.id!);
 
-        expect(connection.stateChanges.single.status, 'PAUSED');
-        expect(connection.stateChanges.single.remainingMs, isNotNull);
+        expect(connection.roomStates.single.status, 'PAUSED');
+        expect(connection.roomStates.single.remainingMs, isNotNull);
         // The deadline is cleared on pause, so the replayed state clears it too
         // rather than leaving the client counting down to a stale one.
-        expect(connection.stateChanges.single.endTime, isNull);
+        expect(connection.roomStates.single.endTime, isNull);
 
         await connection.close();
       });
@@ -503,8 +503,8 @@ void main() {
         // that broadcast sits out the whole round.
         final connection = await clients.connect(alice.id!);
 
-        expect(connection.stateChanges.single.status, 'PLAYING');
-        expect(connection.stateChanges.single.endTime, isNotNull);
+        expect(connection.roomStates.single.status, 'PLAYING');
+        expect(connection.roomStates.single.endTime, isNotNull);
 
         await connection.close();
       });
@@ -526,7 +526,7 @@ void main() {
 
         final connection = await clients.connect(alice.id!);
 
-        expect(connection.stateChanges.single.status, 'FINISHED');
+        expect(connection.roomStates.single.status, 'FINISHED');
         expect(connection.composites.single.svg, stored.finalSvg);
         // Navigation to the result is driven by the composite arriving, so
         // without it this client holds a game screen that never progresses.
