@@ -23,6 +23,7 @@ abstract class Room implements _i1.SerializableModel {
     this.endTime,
     this.pausedAt,
     this.remainingMs,
+    this.finalSvg,
   });
 
   factory Room({
@@ -35,6 +36,7 @@ abstract class Room implements _i1.SerializableModel {
     DateTime? endTime,
     DateTime? pausedAt,
     int? remainingMs,
+    String? finalSvg,
   }) = _RoomImpl;
 
   factory Room.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -52,6 +54,7 @@ abstract class Room implements _i1.SerializableModel {
           ? null
           : _i1.DateTimeJsonExtension.fromJson(jsonSerialization['pausedAt']),
       remainingMs: jsonSerialization['remainingMs'] as int?,
+      finalSvg: jsonSerialization['finalSvg'] as String?,
     );
   }
 
@@ -76,6 +79,8 @@ abstract class Room implements _i1.SerializableModel {
 
   int? remainingMs;
 
+  String? finalSvg;
+
   /// Returns a shallow copy of this [Room]
   /// with some or all fields replaced by the given arguments.
   @_i1.useResult
@@ -89,6 +94,7 @@ abstract class Room implements _i1.SerializableModel {
     DateTime? endTime,
     DateTime? pausedAt,
     int? remainingMs,
+    String? finalSvg,
   });
   @override
   Map<String, dynamic> toJson() {
@@ -103,6 +109,7 @@ abstract class Room implements _i1.SerializableModel {
       if (endTime != null) 'endTime': endTime?.toJson(),
       if (pausedAt != null) 'pausedAt': pausedAt?.toJson(),
       if (remainingMs != null) 'remainingMs': remainingMs,
+      if (finalSvg != null) 'finalSvg': finalSvg,
     };
   }
 
@@ -125,6 +132,7 @@ class _RoomImpl extends Room {
     DateTime? endTime,
     DateTime? pausedAt,
     int? remainingMs,
+    String? finalSvg,
   }) : super._(
          id: id,
          roomCode: roomCode,
@@ -135,6 +143,7 @@ class _RoomImpl extends Room {
          endTime: endTime,
          pausedAt: pausedAt,
          remainingMs: remainingMs,
+         finalSvg: finalSvg,
        );
 
   /// Returns a shallow copy of this [Room]
@@ -151,6 +160,7 @@ class _RoomImpl extends Room {
     Object? endTime = _Undefined,
     Object? pausedAt = _Undefined,
     Object? remainingMs = _Undefined,
+    Object? finalSvg = _Undefined,
   }) {
     return Room(
       id: id is int? ? id : this.id,
@@ -162,6 +172,7 @@ class _RoomImpl extends Room {
       endTime: endTime is DateTime? ? endTime : this.endTime,
       pausedAt: pausedAt is DateTime? ? pausedAt : this.pausedAt,
       remainingMs: remainingMs is int? ? remainingMs : this.remainingMs,
+      finalSvg: finalSvg is String? ? finalSvg : this.finalSvg,
     );
   }
 }

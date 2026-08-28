@@ -4,6 +4,7 @@ import 'dart:async';
 import '../../core/serverpod_client.dart';
 import '../../providers/game_providers.dart';
 import '../../providers/controllers/target_image_controller.dart';
+import '../../providers/controllers/websocket_service.dart';
 import '../widgets/canvas_overlays.dart';
 import '../widgets/drawing_board.dart';
 import '../widgets/drawing_toolbar.dart';
@@ -91,6 +92,28 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     await client.room.stopGame(ids.$1, ids.$2);
   }
 
+  /// The strip above the canvas that says why it is behaving as it is.
+  Widget _banner(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+    required Color color,
+    Widget? action,
+  }) => Container(
+    width: double.infinity,
+    color: color,
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      spacing: 8,
+      children: [
+        Icon(icon, size: 18),
+        Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        ?action,
+      ],
+    ),
+  );
+
   /// The room and the caller, or null if either is missing. The player id is
   /// what proves to the server that the host is the one asking.
   (int, int)? _roomAndPlayer() {
@@ -108,10 +131,24 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final spectating = ref.watch(viewGlobalCanvasProvider);
     final isHost = ref.watch(isHostProvider);
     final isPaused = ref.watch(isPausedProvider);
+    final connection = ref.watch(connectionStatusProvider);
+    final rosterFailed = ref.watch(rosterRefreshFailedProvider);
     final showOwnership = ref.watch(showOwnershipOverlayProvider);
     // A player with a region draws and so has two modes to switch between; the
     // host has only the full-canvas observer view.
     final canSwitchMode = ref.watch(localRegionProvider) != null;
+
+    // A refused stroke has just disappeared from this player's canvas, so it is
+    // said out loud. A snack bar rather than the banner slot: it is a passing
+    // event about one stroke, while the banner describes a state the whole
+    // canvas is in.
+    ref.listen(strokeRejectionProvider, (previous, next) {
+      final message = next?.message;
+      if (message == null) return;
+      ScaffoldMessenger.of(context)
+        ..removeCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    });
 
     // Listen for the final composite to navigate
     ref.listen(finalCanvasSvgProvider, (previous, next) {
@@ -184,24 +221,41 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       ),
       body: Column(
         children: [
-          // Everyone sees the pause, not just the host, so a canvas that has
-          // gone read-only is never unexplained.
-          if (isPaused)
-            Container(
-              width: double.infinity,
-              color: Theme.of(context).colorScheme.tertiaryContainer,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                spacing: 8,
-                children: [
-                  const Icon(Icons.pause_circle_outline, size: 18),
-                  Text(
-                    'Paused by the host — $timeStr left',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
+          // One banner slot, in order of precedence. A canvas that has gone
+          // read-only is never unexplained, and when more than one thing is
+          // wrong the most fundamental one is named: with no connection the
+          // room status on this client is stale and may already be wrong, so
+          // the pause notice would be guesswork; and a player with no region
+          // cannot act on a pause either way.
+          if (connection != ConnectionStatus.connected)
+            _banner(
+              context,
+              icon: Icons.cloud_off,
+              text: connection == ConnectionStatus.reconnecting
+                  ? 'Connection lost — reconnecting'
+                  : 'Not connected',
+              color: Theme.of(context).colorScheme.errorContainer,
+            )
+          else if (rosterFailed)
+            _banner(
+              context,
+              icon: Icons.error_outline,
+              text: 'Could not load the players in this room',
+              color: Theme.of(context).colorScheme.errorContainer,
+              action: TextButton(
+                onPressed: () => ref
+                    .read(webSocketServiceProvider)
+                    .refreshPlayers(room.id!),
+                child: const Text('Retry'),
               ),
+            )
+          // Everyone sees the pause, not just the host.
+          else if (isPaused)
+            _banner(
+              context,
+              icon: Icons.pause_circle_outline,
+              text: 'Paused by the host — $timeStr left',
+              color: Theme.of(context).colorScheme.tertiaryContainer,
             ),
           // The toolbar is a sibling of the canvas and goes away whenever input
           // is not accepted.

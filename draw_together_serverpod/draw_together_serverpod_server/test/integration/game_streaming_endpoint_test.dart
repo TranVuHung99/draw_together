@@ -175,20 +175,59 @@ void main() {
       await late.close();
     });
 
-    test('when a room has no strokes then nothing is replayed', () async {
+    test('when a room has no strokes then no canvas is replayed', () async {
       final connection = await clients.connect(alice.id!);
-      expect(connection.received, isEmpty);
+      // The room's state still arrives — it is not part of the canvas.
+      expect(connection.strokes, isEmpty);
+      expect(connection.undos, isEmpty);
       await connection.close();
     });
 
-    test('when a stroke is live then its sender does not receive it', () async {
+    test('when a stroke is in progress then its sender does not receive the '
+        'batches back', () async {
       final aliceConnection = await clients.connect(alice.id!);
       final bobConnection = await clients.connect(bob.id!);
 
-      await clients.draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+      await clients.sendStroke(
+        aliceConnection,
+        alice.id!,
+        'a1',
+        'start',
+        [0.1, 0.1],
+      );
+      await clients.sendStroke(
+        aliceConnection,
+        alice.id!,
+        'a1',
+        'update',
+        [0.15, 0.15],
+      );
 
       expect(aliceConnection.strokes, isEmpty);
+      expect(bobConnection.strokes.map((s) => s.action), ['start', 'update']);
+
+      await aliceConnection.close();
+      await bobConnection.close();
+    });
+
+    test('when a stroke completes then its author receives the end back with '
+        'the clamped points', () async {
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
+
+      // The second point is outside Alice's half, so the copy that comes back
+      // is the server's, not the one she sent.
+      await clients.draw(aliceConnection, alice.id!, 'a1', [0.1, 0.1, 0.9, 0.2]);
+
+      // Receiving the `end` is what confirms the stroke to its author: the
+      // `start` is still suppressed, so this is the only message she gets.
+      expect(aliceConnection.strokes.map((s) => s.action), ['end']);
+      expect(aliceConnection.strokes.single.strokeId, 'a1');
+      expect(aliceConnection.strokes.single.points, [0.1, 0.1, 0.5, 0.2]);
+      // Everyone else receives it too, unchanged.
       expect(bobConnection.strokes.map((s) => s.strokeId), ['a1', 'a1']);
+      expect(bobConnection.strokes.last.points, [0.1, 0.1, 0.5, 0.2]);
+      expect(aliceConnection.rejections, isEmpty);
 
       await aliceConnection.close();
       await bobConnection.close();
@@ -310,7 +349,12 @@ void main() {
       await settle();
 
       expect((await storedStrokes()).map((s) => s.strokeId), ['a1']);
-      expect(connection.undos, isEmpty);
+      // The author is told, and told which rule refused it.
+      expect(connection.rejections.map((r) => r.strokeId), ['a2']);
+      expect(connection.rejections.single.reason, 'NOT_PLAYING');
+      // The `start` for a2 got through on the cached status, so the refused
+      // `end` retracts it rather than leaving a fragment on every client.
+      expect(connection.undos.map((u) => u.strokeId), ['a2']);
 
       await connection.close();
     });
@@ -325,12 +369,338 @@ void main() {
       await connection.close();
     });
 
-    test('when the host sends a stroke then it is ignored', () async {
+    test('when the host sends a stroke then it is refused for having no '
+        'region', () async {
       final connection = await clients.connect(host.id!);
       await clients.draw(connection, host.id!, 'h1', [0.1, 0.1, 0.2, 0.2]);
 
       expect(await storedStrokes(), isEmpty);
+      expect(
+        connection.rejections.map((r) => r.reason),
+        // One for the `start`, one for the `end`.
+        ['NO_REGION', 'NO_REGION'],
+      );
+      expect(connection.rejections.first.strokeId, 'h1');
+      // Nothing was ever broadcast, so there is no fragment to retract.
+      expect(connection.undos, isEmpty);
       await connection.close();
+    });
+
+    test('when a stroke names another player then it is refused as not the '
+        'owner', () async {
+      final aliceConnection = await clients.connect(alice.id!);
+      final bobConnection = await clients.connect(bob.id!);
+
+      // Alice's connection, claiming to be Bob.
+      await clients.sendStroke(
+        aliceConnection,
+        bob.id!,
+        'spoofed',
+        'end',
+        [0.6, 0.1, 0.7, 0.2],
+      );
+
+      expect(await storedStrokes(), isEmpty);
+      expect(aliceConnection.rejections.single.reason, 'NOT_OWNER');
+      expect(aliceConnection.rejections.single.strokeId, 'spoofed');
+      // The rejection is addressed to one client: nothing reached the channel,
+      // so Bob does not learn that a stroke naming him was refused.
+      expect(bobConnection.rejections, isEmpty);
+      expect(bobConnection.strokes, isEmpty);
+      expect(bobConnection.undos, isEmpty);
+
+      await aliceConnection.close();
+      await bobConnection.close();
+    });
+
+    test('when the same stroke id occurs in another room then it is still '
+        'stored', () async {
+      // A stroke id identifies a stroke within its room, so a collision across
+      // rooms must not silently discard the second one.
+      final other = await Room.db.insertRow(
+        session,
+        Room(
+          roomCode: 'TEST02',
+          hostId: host.id!,
+          status: 'PLAYING',
+          canvasWidth: 1000,
+          canvasHeight: 1000,
+          endTime: DateTime.now().add(const Duration(minutes: 5)),
+        ),
+      );
+      final carol = await Player.db.insertRow(
+        session,
+        Player(
+          roomId: other.id!,
+          name: 'carol',
+          regionX: 0,
+          regionY: 0,
+          regionWidth: 1,
+          regionHeight: 1,
+        ),
+      );
+
+      final here = await clients.connect(alice.id!);
+      await clients.draw(here, alice.id!, 'shared', [0.1, 0.1, 0.2, 0.2]);
+
+      final elsewhere = RoomClients(endpoints, sessionBuilder, other.id!);
+      final there = await elsewhere.connect(carol.id!);
+      await elsewhere.draw(there, carol.id!, 'shared', [0.3, 0.3, 0.4, 0.4]);
+
+      expect((await storedStrokes()).map((s) => s.strokeId), ['shared']);
+      final otherRoomStrokes = await Stroke.db.find(
+        session,
+        where: (s) => s.roomId.equals(other.id!),
+      );
+      expect(otherRoomStrokes.map((s) => s.strokeId), ['shared']);
+      expect(otherRoomStrokes.single.points, [0.3, 0.3, 0.4, 0.4]);
+
+      await here.close();
+      await there.close();
+    });
+
+    group('Given a client subscribing', () {
+      test('when it subscribes then the room state arrives before the '
+          'canvas', () async {
+        final drawn = await clients.connect(alice.id!);
+        await clients.draw(drawn, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+
+        final connection = await clients.connect(bob.id!);
+
+        // Room state first: a client should not paint a canvas before it knows
+        // the rules the canvas is under.
+        expect(connection.received.first, isA<GameStateChangeMsg>());
+        expect(connection.stateChanges.single.status, 'PLAYING');
+        expect(connection.stateChanges.single.endTime, isNotNull);
+        expect(connection.strokes.map((s) => s.strokeId), ['a1']);
+
+        await drawn.close();
+        await connection.close();
+      });
+
+      test('when the room was paused while it was away then it learns the '
+          'room is paused', () async {
+        await endpoints.room.pauseGame(sessionBuilder, room.id!, host.id!);
+        await settle();
+
+        // A client that was not connected for the pause broadcast. Without the
+        // state replay it would hold `PLAYING` forever: a drawable canvas
+        // whose every stroke comes back refused.
+        final connection = await clients.connect(alice.id!);
+
+        expect(connection.stateChanges.single.status, 'PAUSED');
+        expect(connection.stateChanges.single.remainingMs, isNotNull);
+        // The deadline is cleared on pause, so the replayed state clears it too
+        // rather than leaving the client counting down to a stale one.
+        expect(connection.stateChanges.single.endTime, isNull);
+
+        await connection.close();
+      });
+
+      test('when the game started while it was away then it learns the game '
+          'is playing', () async {
+        // The waiting screen leaves only on `PLAYING`, so a client that misses
+        // that broadcast sits out the whole round.
+        final connection = await clients.connect(alice.id!);
+
+        expect(connection.stateChanges.single.status, 'PLAYING');
+        expect(connection.stateChanges.single.endTime, isNotNull);
+
+        await connection.close();
+      });
+
+      test('when the room finished while it was away then it receives the '
+          'state and the stored composite', () async {
+        final drawn = await clients.connect(alice.id!);
+        await clients.draw(drawn, alice.id!, 'a1', [0.1, 0.1, 0.2, 0.2]);
+        await drawn.close();
+
+        await endpoints.room.stopGame(sessionBuilder, room.id!, host.id!);
+        await settle();
+
+        // The composite is broadcast once, at the one instant every client in
+        // the room is at risk together. It is stored so this client can still
+        // be given it.
+        final stored = await Room.db.findById(session, room.id!);
+        expect(stored!.finalSvg, isNotNull);
+
+        final connection = await clients.connect(alice.id!);
+
+        expect(connection.stateChanges.single.status, 'FINISHED');
+        expect(connection.composites.single.svg, stored.finalSvg);
+        // Navigation to the result is driven by the composite arriving, so
+        // without it this client holds a game screen that never progresses.
+        expect(connection.composites, hasLength(1));
+
+        await connection.close();
+      });
+
+      test('when the room is still in progress then no composite is '
+          'delivered', () async {
+        final connection = await clients.connect(alice.id!);
+
+        expect(connection.composites, isEmpty);
+        expect(
+          (await Room.db.findById(session, room.id!))!.finalSvg,
+          isNull,
+        );
+
+        await connection.close();
+      });
+    });
+
+    group('Given a stroke left open', () {
+      test('when the room is paused mid-stroke then the fragment is retracted '
+          'from everyone', () async {
+        final aliceConnection = await clients.connect(alice.id!);
+        final bobConnection = await clients.connect(bob.id!);
+
+        // Alice starts a stroke; Bob has seen it start.
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'open',
+          'start',
+          [0.1, 0.1],
+        );
+        expect(bobConnection.strokes.map((s) => s.action), ['start']);
+
+        await endpoints.room.pauseGame(sessionBuilder, room.id!, host.id!);
+        await settle();
+
+        // The next message for that stroke is refused, and the fragment goes
+        // with it.
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'open',
+          'end',
+          [0.1, 0.1, 0.2, 0.2],
+        );
+
+        expect(await storedStrokes(), isEmpty);
+        expect(aliceConnection.rejections.single.reason, 'NOT_PLAYING');
+        // The retraction is a broadcast: it has to reach every client that saw
+        // the stroke start, including its author.
+        expect(aliceConnection.undos.map((u) => u.strokeId), ['open']);
+        expect(bobConnection.undos.map((u) => u.strokeId), ['open']);
+
+        // And a client arriving afterwards replays a canvas with no trace of
+        // it, so all three agree: author, observer, and fresh joiner.
+        final fresh = await clients.connect(bob.id!);
+        expect(fresh.strokes, isEmpty);
+
+        await fresh.close();
+        await aliceConnection.close();
+        await bobConnection.close();
+      });
+
+      test('when the room resumes and a late end arrives then nothing is '
+          'stored and nothing is retracted twice', () async {
+        final aliceConnection = await clients.connect(alice.id!);
+        final bobConnection = await clients.connect(bob.id!);
+
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'open',
+          'start',
+          [0.1, 0.1],
+        );
+        await endpoints.room.pauseGame(sessionBuilder, room.id!, host.id!);
+        await settle();
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'open',
+          'update',
+          [0.15, 0.15],
+        );
+
+        await endpoints.room.resumeGame(sessionBuilder, room.id!, host.id!);
+        await settle();
+
+        // The in-flight `end` arrives after the room is playing again. Without
+        // the abandoned-id memory it would persist a stroke every client has
+        // already been told to remove.
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'open',
+          'end',
+          [0.1, 0.1, 0.2, 0.2],
+        );
+
+        expect(await storedStrokes(), isEmpty);
+        expect(aliceConnection.undos.map((u) => u.strokeId), ['open']);
+        expect(bobConnection.undos.map((u) => u.strokeId), ['open']);
+        expect(
+          aliceConnection.rejections.map((r) => r.reason),
+          ['NOT_PLAYING', 'ABANDONED'],
+        );
+
+        await aliceConnection.close();
+        await bobConnection.close();
+      });
+
+      test('when the connection ends mid-stroke then the fragment is '
+          'retracted', () async {
+        final aliceConnection = await clients.connect(alice.id!);
+        final bobConnection = await clients.connect(bob.id!);
+
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'open',
+          'start',
+          [0.1, 0.1],
+        );
+        expect(bobConnection.strokes.map((s) => s.action), ['start']);
+
+        // Alice's connection goes away without an `end`.
+        await aliceConnection.close();
+        await settle();
+
+        expect(await storedStrokes(), isEmpty);
+        expect(bobConnection.undos.map((u) => u.strokeId), ['open']);
+
+        await bobConnection.close();
+      });
+
+      test('when a stroke completed cleanly then a later refusal retracts '
+          'nothing', () async {
+        final aliceConnection = await clients.connect(alice.id!);
+        final bobConnection = await clients.connect(bob.id!);
+
+        await clients.draw(
+          aliceConnection,
+          alice.id!,
+          'done',
+          [0.1, 0.1, 0.2, 0.2],
+        );
+
+        await endpoints.room.pauseGame(sessionBuilder, room.id!, host.id!);
+        await settle();
+
+        // A new stroke, refused before anything was broadcast for it.
+        await clients.sendStroke(
+          aliceConnection,
+          alice.id!,
+          'next',
+          'start',
+          [0.3, 0.3],
+        );
+
+        expect((await storedStrokes()).map((s) => s.strokeId), ['done']);
+        expect(aliceConnection.rejections.single.strokeId, 'next');
+        // The completed stroke is persisted, so there is no open stroke and
+        // nothing to take back.
+        expect(aliceConnection.undos, isEmpty);
+        expect(bobConnection.undos, isEmpty);
+
+        await aliceConnection.close();
+        await bobConnection.close();
+      });
     });
   });
 

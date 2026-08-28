@@ -15,3 +15,10 @@ fields:
   # answer to "how long is left" while paused, the way endTime is while
   # playing, so the countdown never has to reconstruct one from the other.
   remainingMs: int?
+  # The composite, as the SVG document generated when the room finished. Null
+  # in every other state.
+  #
+  # Stored rather than only broadcast: a client that was not connected at the
+  # instant of finalization could otherwise never obtain it, and the end of a
+  # round is the one moment every client in the room is at risk together.
+  finalSvg: String?

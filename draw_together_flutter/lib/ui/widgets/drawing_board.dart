@@ -151,14 +151,29 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
     // or reconnects later.
     _send(room, player.id!, stroke.id, 'end', stroke.points);
 
-    // Save final local stroke — the server does not echo it back.
-    ref.read(strokesProvider.notifier).addStroke(stroke);
+    // The stroke is held apart from the board until the server echoes the
+    // `end` back. It stays painted throughout, so finishing a stroke has no
+    // visible latency, but the copy that becomes artwork is the server's.
+    ref.read(pendingStrokesProvider.notifier).add(stroke);
     ref.read(strokeInProgressProvider.notifier).set(false);
 
     setState(() {
       _batchPoints.clear();
       _activeStroke = null;
     });
+  }
+
+  /// Drops the stroke in progress without sending an `end` for it.
+  ///
+  /// Used when the connection goes away mid-drag: the `end` has nowhere to go,
+  /// so there is nothing to hold pending. The server retracts the `start` that
+  /// other clients already saw, which is what removes it from this canvas too.
+  void _abortStroke() {
+    _batchTimer?.cancel();
+    _batchPoints.clear();
+    ref.read(strokeInProgressProvider.notifier).set(false);
+    if (_activeStroke == null) return;
+    setState(() => _activeStroke = null);
   }
 
   void _send(
@@ -188,7 +203,15 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
 
   @override
   Widget build(BuildContext context) {
+    // Losing the connection mid-drag ends the stroke rather than leaving it
+    // open: nothing more can be sent for it, and the server retracts the
+    // fragment other clients are holding.
+    ref.listen(isConnectedProvider, (previous, next) {
+      if (!next) _abortStroke();
+    });
+
     final board = ref.watch(strokesProvider);
+    final pending = ref.watch(pendingStrokesProvider);
     final regions = ref.watch(playerRegionsProvider);
     final room = ref.watch(roomProvider);
     final canDraw = ref.watch(canDrawProvider);
@@ -216,6 +239,7 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
             painter: DrawingPainter(
               board: board,
               regions: regions,
+              pendingStrokes: pending.values.toList(growable: false),
               currentStroke: _activeStroke,
               viewport: viewport,
             ),
@@ -265,8 +289,11 @@ class _DrawingBoardState extends ConsumerState<DrawingBoard> {
     );
   }
 
+  /// A stroke id, from a cryptographically secure source: a stroke id is the
+  /// key a stroke is stored, confirmed and retracted under, and `Random()` is
+  /// seeded observably.
   String _generateUuid() {
-    final random = Random();
+    final random = Random.secure();
     final parts = [
       random.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0'),
       random.nextInt(0xFFFF).toRadixString(16).padLeft(4, '0'),

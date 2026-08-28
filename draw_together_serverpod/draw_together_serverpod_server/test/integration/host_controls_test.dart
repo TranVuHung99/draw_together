@@ -93,6 +93,9 @@ void main() {
         await start();
         final alice = drawers.first;
         final connection = await clients.connect(alice.id!);
+        // Subscribing delivers the room's current state. What must not appear
+        // is anything after that, since a refused command broadcasts nothing.
+        final onSubscribe = connection.stateChanges.length;
         final before = await reload();
 
         expect(
@@ -113,7 +116,7 @@ void main() {
         expect(after.status, before.status);
         expect(after.endTime, before.endTime);
         expect(after.remainingMs, isNull);
-        expect(connection.stateChanges, isEmpty);
+        expect(connection.stateChanges, hasLength(onSubscribe));
 
         await connection.close();
       });

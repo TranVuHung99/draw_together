@@ -20,7 +20,7 @@ class DrawingToolbar extends ConsumerWidget {
     final tool = ref.watch(drawingToolProvider);
     final notifier = ref.read(drawingToolProvider.notifier);
     final undoable = ref.watch(undoableStrokeProvider);
-    final drawing = ref.watch(strokeInProgressProvider);
+    final canUndo = ref.watch(canUndoProvider);
 
     return Container(
       color: Colors.grey[200],
@@ -30,9 +30,10 @@ class DrawingToolbar extends ConsumerWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.undo),
-            // Disabled mid-drag rather than reasoning about which stroke an
-            // undo would land on, and disabled when there is nothing to undo.
-            onPressed: (undoable == null || drawing)
+            // Disabled mid-drag, and while a finished stroke is still awaiting
+            // confirmation, rather than reasoning about which stroke an undo
+            // would land on. Disabled too when there is nothing to undo.
+            onPressed: (!canUndo || undoable == null)
                 ? null
                 : () => _undo(ref, undoable.id, undoable.playerId),
             tooltip: 'Undo my last stroke',

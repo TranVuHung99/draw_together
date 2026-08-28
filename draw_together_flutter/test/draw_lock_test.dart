@@ -39,12 +39,14 @@ bool canDraw({
   required String status,
   required Player player,
   bool spectating = false,
+  ConnectionStatus connection = ConnectionStatus.connected,
 }) {
   final container = ProviderContainer();
   addTearDown(container.dispose);
   container.read(roomProvider.notifier).set(roomWith(status));
   container.read(currentPlayerProvider.notifier).set(player);
   container.read(viewGlobalCanvasProvider.notifier).set(spectating);
+  container.read(connectionStatusProvider.notifier).set(connection);
   return container.read(canDrawProvider);
 }
 
@@ -83,6 +85,47 @@ void main() {
     for (final status in ['WAITING', 'PLAYING', 'PAUSED', 'FINISHED']) {
       expect(canDraw(status: status, player: host), isFalse, reason: status);
     }
+  });
+
+  test('when there is no connection then input is refused even while playing',
+      () {
+    // `sendMessage` drops a message on a closed controller without a word,
+    // which is one of the ways strokes went missing, so input is refused up
+    // front instead.
+    for (final connection in [
+      ConnectionStatus.reconnecting,
+      ConnectionStatus.disconnected,
+    ]) {
+      expect(
+        canDraw(status: 'PLAYING', player: alice, connection: connection),
+        isFalse,
+        reason: connection.name,
+      );
+    }
+  });
+
+  test('when nothing has connected yet then input is refused', () {
+    // Nothing is connected before `WebSocketService.connect` runs, so the
+    // default must not be an optimistic guess.
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(roomProvider.notifier).set(roomWith('PLAYING'));
+    container.read(currentPlayerProvider.notifier).set(alice);
+    expect(container.read(canDrawProvider), isFalse);
+  });
+
+  test('when the connection is re-established then input is accepted again',
+      () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(roomProvider.notifier).set(roomWith('PLAYING'));
+    container.read(currentPlayerProvider.notifier).set(alice);
+
+    final status = container.read(connectionStatusProvider.notifier);
+    status.set(ConnectionStatus.reconnecting);
+    expect(container.read(canDrawProvider), isFalse);
+    status.set(ConnectionStatus.connected);
+    expect(container.read(canDrawProvider), isTrue);
   });
 
   group('Given a countdown', () {

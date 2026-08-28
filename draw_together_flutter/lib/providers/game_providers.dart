@@ -101,19 +101,49 @@ final playerRegionsProvider = Provider<Map<int, Rect>>((ref) {
   return regions;
 });
 
-/// Whether drawing input is accepted. All three conditions fail independently:
-/// the host never has a region, a spectating player is not in draw mode, and
-/// everyone fails the status check before the game starts. The status check is
-/// also what locks the canvas once the game is `FINISHED` or `PAUSED`, in draw
-/// mode as much as in spectate mode.
+/// The state of this client's streaming connection.
 ///
-/// This is presentational. The server refuses writes outside `PLAYING` too,
-/// and that refusal is the enforcement.
+/// `reconnecting` and `disconnected` are both "no live connection"; they differ
+/// in whether another attempt is coming, which is the part worth telling the
+/// player.
+enum ConnectionStatus { connected, reconnecting, disconnected }
+
+/// Whether this client has a live stream to the server.
+///
+/// Nothing has connected before `WebSocketService.connect` runs, so the initial
+/// state is `disconnected` rather than an optimistic guess.
+class ConnectionStatusNotifier extends Notifier<ConnectionStatus> {
+  @override
+  ConnectionStatus build() => ConnectionStatus.disconnected;
+  void set(ConnectionStatus status) => state = status;
+}
+
+final connectionStatusProvider =
+    NotifierProvider<ConnectionStatusNotifier, ConnectionStatus>(
+      ConnectionStatusNotifier.new,
+    );
+
+/// Whether there is a live connection to draw over.
+final isConnectedProvider = Provider<bool>(
+  (ref) => ref.watch(connectionStatusProvider) == ConnectionStatus.connected,
+);
+
+/// Whether drawing input is accepted. All four conditions fail independently:
+/// the host never has a region, a spectating player is not in draw mode,
+/// everyone fails the status check before the game starts, and nobody may draw
+/// into a dead socket. The status check is also what locks the canvas once the
+/// game is `FINISHED` or `PAUSED`, in draw mode as much as in spectate mode.
+///
+/// The connection condition is not presentational in the way the others are.
+/// `sendMessage` drops a message on a closed controller without a word, which
+/// is one of the ways strokes went missing, so input is refused up front
+/// instead.
 final canDrawProvider = Provider<bool>((ref) {
   final inDrawMode = !ref.watch(viewGlobalCanvasProvider);
   final hasRegion = ref.watch(localRegionProvider) != null;
   final isPlaying = ref.watch(roomProvider)?.status == 'PLAYING';
-  return inDrawMode && hasRegion && isPlaying;
+  final isConnected = ref.watch(isConnectedProvider);
+  return inDrawMode && hasRegion && isPlaying && isConnected;
 });
 
 /// Whether the game is frozen. Every client shows this, not just the host, so
@@ -171,6 +201,11 @@ class StrokesNotifier extends Notifier<StrokeBoard> {
       state = state.upsert(
         (existing ?? _strokeFrom(msg, points)).withPoints(points),
       );
+      // An `end` for the local player's own stroke is its confirmation: the
+      // server's clamped copy has just entered the board, so the pending copy
+      // is done with. Keying on the stroke id alone is enough — only the local
+      // player's strokes are ever pending, and ids are random.
+      ref.read(pendingStrokesProvider.notifier).remove(msg.strokeId);
       return;
     }
 
@@ -180,14 +215,15 @@ class StrokesNotifier extends Notifier<StrokeBoard> {
   }
 
   /// Removes a stroke the server has confirmed retracted.
+  ///
+  /// The server sends this for a real undo and for a stroke it has abandoned —
+  /// one refused mid-stroke, or left open by a dropped connection — so it has
+  /// to reach the pending store as well as the board. A pending stroke has no
+  /// entry in the board, and a confirmed one has no entry in pending, so only
+  /// one of the two removals ever does anything.
   void handleUndo(StrokeUndoMsg msg) {
     state = state.remove(msg.playerId, msg.strokeId);
-  }
-
-  /// Records the local player's own completed stroke, which the server does
-  /// not echo back to them.
-  void addStroke(Stroke newStroke) {
-    state = state.upsert(newStroke);
+    ref.read(pendingStrokesProvider.notifier).remove(msg.strokeId);
   }
 
   void clear() {
@@ -208,6 +244,49 @@ final strokesProvider = NotifierProvider<StrokesNotifier, StrokeBoard>(
   StrokesNotifier.new,
 );
 
+/// The local player's completed strokes that the server has not confirmed yet,
+/// keyed by stroke id, in the order they were sent.
+///
+/// Deliberately outside [StrokeBoard]. The board means "the composed artwork,
+/// in server sequence order": it is what [undoableStrokeProvider] reads, what
+/// the painter composites, and what a replay reconstructs. Admitting an
+/// unconfirmed stroke into it is what let the client offer an undo for a stroke
+/// the server had never heard of, so keeping the two apart makes that guarantee
+/// structural rather than a rule to remember.
+///
+/// A stroke leaves here by confirmation, rejection, retraction, or the canvas
+/// reset that precedes a replay — and by nothing else.
+class PendingStrokesNotifier extends Notifier<Map<String, Stroke>> {
+  @override
+  Map<String, Stroke> build() => const {};
+
+  /// Holds a stroke whose `end` has been sent. Insertion order is send order,
+  /// which is the order the painter draws them in.
+  void add(Stroke stroke) {
+    state = {...state, stroke.id: stroke};
+  }
+
+  void remove(String strokeId) {
+    if (!state.containsKey(strokeId)) return;
+    state = {...state}..remove(strokeId);
+  }
+
+  void clear() {
+    if (state.isEmpty) return;
+    state = const {};
+  }
+}
+
+final pendingStrokesProvider =
+    NotifierProvider<PendingStrokesNotifier, Map<String, Stroke>>(
+      PendingStrokesNotifier.new,
+    );
+
+/// Whether any stroke of the local player's is awaiting confirmation.
+final hasPendingStrokesProvider = Provider<bool>(
+  (ref) => ref.watch(pendingStrokesProvider).isNotEmpty,
+);
+
 /// Whether the local player is part-way through a stroke. Undo is unavailable
 /// while one is open, rather than having to reason about what it would target.
 class StrokeInProgressNotifier extends Notifier<bool> {
@@ -221,13 +300,79 @@ final strokeInProgressProvider =
       StrokeInProgressNotifier.new,
     );
 
-/// The local player's most recent stroke — what an undo would retract, and
-/// null when they have nothing to undo.
+/// Whether the undo control is offered. There is no sound answer to "what
+/// would this retract" while a stroke is under the pen, and none either while a
+/// finished stroke is still waiting for the server to confirm it.
+final canUndoProvider = Provider<bool>((ref) {
+  if (ref.watch(strokeInProgressProvider)) return false;
+  if (ref.watch(hasPendingStrokesProvider)) return false;
+  return ref.watch(undoableStrokeProvider) != null;
+});
+
+/// The local player's most recent *confirmed* stroke — what an undo would
+/// retract, and null when they have nothing to undo.
+///
+/// It reads the board and nothing else, so a pending stroke can never become
+/// the undo target and an undo request can never name a stroke the server does
+/// not hold.
 final undoableStrokeProvider = Provider<Stroke?>((ref) {
   final playerId = ref.watch(currentPlayerProvider)?.id;
   if (playerId == null) return null;
   return ref.watch(strokesProvider).latestOf(playerId);
 });
+
+/// A stroke the server refused, and which rule refused it.
+class StrokeRejection {
+  final String strokeId;
+
+  /// `NOT_PLAYING`, `NO_REGION`, `NOT_OWNER`, or `ABANDONED`.
+  final String reason;
+
+  const StrokeRejection({required this.strokeId, required this.reason});
+
+  /// What to tell the player, or null when there is nothing worth saying.
+  ///
+  /// `ABANDONED` is silent on purpose: the server retracts a stroke before it
+  /// starts refusing messages for it, so the stroke has already come off this
+  /// canvas and a second notice would only explain the same event twice.
+  String? get message => switch (reason) {
+    'NOT_PLAYING' => 'That stroke was not accepted — the game is not running.',
+    'NO_REGION' => 'That stroke was not accepted — you have no region to draw '
+        'in.',
+    'NOT_OWNER' => 'That stroke was not accepted — it named another player.',
+    'ABANDONED' => null,
+    _ => 'That stroke was not accepted.',
+  };
+}
+
+/// The last refusal the server sent, for the game screen to show. Every
+/// rejection is a new instance, so two identical refusals are two notices.
+class StrokeRejectionNotifier extends Notifier<StrokeRejection?> {
+  @override
+  StrokeRejection? build() => null;
+  void set(StrokeRejection? rejection) => state = rejection;
+}
+
+final strokeRejectionProvider =
+    NotifierProvider<StrokeRejectionNotifier, StrokeRejection?>(
+      StrokeRejectionNotifier.new,
+    );
+
+/// Whether the roster could not be refreshed after repeated attempts.
+///
+/// A drawing player whose roster is stale has no region, which locks the canvas
+/// with nothing on screen to explain why. This is what puts the explanation
+/// there.
+class RosterRefreshFailedNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool failed) => state = failed;
+}
+
+final rosterRefreshFailedProvider =
+    NotifierProvider<RosterRefreshFailedNotifier, bool>(
+      RosterRefreshFailedNotifier.new,
+    );
 
 /// The reference this client is entitled to see: the host the whole target, a
 /// drawing player their own crop.
