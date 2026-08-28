@@ -12,6 +12,8 @@ timer runs out the regions become one composite picture.
   thumbnail. Nobody but the host sees the whole picture until the round is over.
 - The host observes the whole canvas live, does not draw, and can see which region belongs to whom.
 - Strokes sync in real time, incrementally — the canvas is never resent wholesale.
+- A dropped connection re-establishes itself and rebuilds the canvas from the server. While it is
+  down the canvas is read-only and says so, rather than quietly swallowing strokes.
 - The host can **pause**, **resume**, or **stop the round early**; pausing freezes the clock and
   locks every canvas.
 - When the deadline passes — or the host stops early — drawing locks and everyone receives the final
@@ -33,7 +35,8 @@ No Firebase, no third-party realtime service.
 ```
 draw_together_flutter/                    the game client
   lib/models/                             canvas viewport, stroke, per-player stroke board
-  lib/providers/                          Riverpod state; websocket_service.dart is the socket bridge
+  lib/providers/                          Riverpod state; websocket_service.dart is the socket
+                                          bridge and owns the reconnect loop
   lib/ui/                                 screens and the canvas widgets
 draw_together_serverpod/
   draw_together_serverpod_server/         the server
@@ -65,11 +68,49 @@ eraser to its owner's own work instead of punching through a neighbour's. Compos
 canvas space and the result is mapped through the viewport afterwards, so draw mode and the
 full-canvas view are the same image at different magnifications.
 
-**The server owns the truth.** Completed strokes are persisted one row each and replayed to any
-client that subscribes, so the canvas survives a disconnect — including the host's. Undo is a
-server-verified deletion of the player's own most recent stroke, broadcast to everyone including
-the requester. The end of the game is a scheduled server-side future call: it flips the room to
-`FINISHED`, generates the composite, and broadcasts it. Client countdowns are display-only.
+**The server owns the truth, including for the player who drew it.** Completed strokes are persisted
+one row each and replayed to any client that subscribes, so the canvas survives a disconnect —
+including the host's. A player's own finished stroke is no exception: the server echoes the `end`
+back to its author carrying the server's region-clamped points, and *that* copy is what enters the
+board. The client's own clamping is a rendering convenience, not a correctness mechanism. Undo is a
+server-verified deletion of the player's own most recent *confirmed* stroke, broadcast to everyone
+including the requester. The end of the game is a scheduled server-side future call: it flips the
+room to `FINISHED`, stores the composite on the room and broadcasts it. Client countdowns are
+display-only.
+
+**A finished stroke is pending until it is confirmed.** Between pen-up and the server's echoed `end`
+the stroke is held in a store separate from the composed board, and painted into its owner's layer
+just as the stroke under the pen is — so finishing a stroke has no visible latency while the
+committed artwork stays authoritative. Keeping it out of the board is what makes the undo guarantee
+structural rather than a rule to remember: undo reads the board, so it can never name a stroke the
+server has never heard of. The control is unavailable while anything of yours is unconfirmed, for
+the same reason it is unavailable mid-drag.
+
+**Every refusal is said out loud, and a fragment is taken back.** When the server declines a stroke —
+the room is not `PLAYING`, the player has no region, the message names someone else — it replies
+with a rejection naming the reason, written to that client's own stream and never to the room
+channel, which is a broadcast. If it has already broadcast that stroke's `start`, it also retracts
+the stroke from the whole room, so nobody is left holding a fragment of a stroke the database will
+never have. The same retraction fires when a connection dies mid-stroke. A retracted stroke id stays
+closed, so a late `end` arriving after a pause and a resume cannot resurrect something every client
+has already been told to remove.
+
+**A reconnect rebuilds state rather than merging into it.** The client re-establishes a dropped
+stream with jittered backoff, and discards its board and its pending strokes *before* re-subscribing,
+so the replay that follows is the whole truth. Merging would be unsound: a replay can add or replace
+a stroke but never remove one, so an orphan the server never accepted would survive forever. A
+stroke whose `end` was lost to the disconnect is dropped rather than re-sent — losing one to a dead
+socket is acceptable in a party game, believing you still have it is not. While there is no
+connection the canvas refuses input outright, since a stroke drawn into a closed socket was being
+discarded without a word.
+
+**A subscription replays the room's state, not just its canvas.** Room status reaches clients as a
+broadcast, and nothing on a client re-reads it, so a client that was not connected at the instant of
+a transition would never learn of it: it would sit out a round it was meant to play, or hold a
+finished game at 00:00 forever. So every subscribe delivers the room's current status and clock from
+the room row, ahead of the stroke replay, and a finished room hands over its stored composite too.
+That is why the composite is a column rather than only a broadcast — the end of a round is the one
+instant every client in the room is at risk together.
 
 **The room row, not the schedule, decides when the game is over.** A room runs
 `WAITING → PLAYING → FINISHED`, with `PLAYING ↔ PAUSED` in between. Pausing banks the time left,
@@ -96,9 +137,12 @@ canvas's hit-testing, so a drag across it can never start a stroke.
 
 **The final artifact is an SVG.** The stroke model maps onto SVG one-to-one, so the server builds
 the composite as a string — one `<g clip-path>` per player, a `<polyline>` per stroke, a `<mask>`
-per eraser — in a unit `viewBox`. Clients render it with Skia; PNG export is an explicit action that
-rasterizes locally at the room's configured resolution, so nobody pays for a raster nobody asked
-for.
+per eraser — in a unit `viewBox`. It is composed once, as the room is written to `FINISHED`, and
+kept on the room, so every later reader gets that one document rather than a fresh composition. It
+is built from persisted strokes alone, so an unconfirmed or in-progress stroke — which exists only
+on its author's screen — can never reach it. Clients render it with Skia; PNG export is an explicit
+action that rasterizes locally at the room's configured resolution, so nobody pays for a raster
+nobody asked for.
 
 ## Running it
 
@@ -144,7 +188,9 @@ dart bin/main.dart --role maintenance --apply-migrations
 
 Integration tests run against the test database on port 9090 and cover stroke persistence, replay,
 undo ownership rules, the room state machine, host authorization, pause/resume/stop, target upload
-validation and per-region crop geometry, and SVG generation:
+validation and per-region crop geometry, SVG generation, the acknowledgement protocol — echo of a
+completed stroke to its author, explicit rejections, retraction of a stroke abandoned mid-drag or
+mid-connection — and the room state a subscription replays:
 
 ```bash
 cd draw_together_serverpod/draw_together_serverpod_server
@@ -152,13 +198,35 @@ dart bin/main.dart --mode test --role maintenance --apply-migrations   # first r
 dart test
 ```
 
+The client has its own suite, which needs no database. It covers when drawing input is accepted, the
+pending-stroke lifecycle — confirmation, rejection, retraction, and the reset before a replay — and
+the layered composition, verified by rasterizing the painter and sampling pixels rather than by
+inspecting its calls, since clipping and eraser containment are only observable in the composed
+image:
+
+```bash
+cd draw_together_flutter
+flutter test
+```
+
 ## Known gaps
 
 Deliberately out of scope for a playable core, and worth knowing before extending it:
 
-- **No reconnect after a page refresh.** The server replays a room's strokes to any client that
-  subscribes, but the client keeps no record of which room and player it was, so refreshing a tab
-  returns to the lobby with no way back in.
+- **No session restore after a page refresh.** A dropped *stream* re-establishes itself and replays
+  the room, but a refresh destroys the client's record of which room and player it was, so it
+  returns to the lobby with no way back in. Reconnecting recovers a connection, not an identity.
+- **A stroke lost to a disconnect stays lost.** An unconfirmed stroke is discarded on reconnect
+  rather than re-sent: replaying it would give it a sequence number that misrepresents when it was
+  drawn, and could resurrect a stroke the room was already told to retract. It disappears visibly,
+  which is the point — the bug being avoided is believing you still have it.
+- **A client disconnected in the lobby for a whole round does not follow the game.** It now receives
+  the finished state and the composite when it reconnects, but the waiting screen only navigates on
+  `PLAYING`, so it sits there rather than showing the result.
+- **The reconnect loop has no automated coverage.** Its parts are tested — the canvas locking on
+  connection state, the reset before re-subscribing, the replay being authoritative — but verifying
+  the loop itself means killing a live server under a running app, which the in-process test harness
+  cannot do.
 - **No authentication.** Session commands — `startGame`, `pauseGame`, `resumeGame`, `stopGame`, and
   the target upload — are host-checked: the caller passes a `playerId` and the server refuses the
   command unless it matches the room's `hostId`. That check is an identity assertion over an
