@@ -18,15 +18,16 @@ import 'player.dart' as _i5;
 import 'room.dart' as _i6;
 import 'room_subscribe_msg.dart' as _i7;
 import 'stroke.dart' as _i8;
-import 'stroke_sync_msg.dart' as _i9;
-import 'stroke_undo_msg.dart' as _i10;
-import 'target_image.dart' as _i11;
+import 'stroke_rejected_msg.dart' as _i9;
+import 'stroke_sync_msg.dart' as _i10;
+import 'stroke_undo_msg.dart' as _i11;
+import 'target_image.dart' as _i12;
 import 'package:draw_together_serverpod_client/src/protocol/player.dart'
-    as _i12;
-import 'package:serverpod_auth_idp_client/serverpod_auth_idp_client.dart'
     as _i13;
-import 'package:serverpod_auth_core_client/serverpod_auth_core_client.dart'
+import 'package:serverpod_auth_idp_client/serverpod_auth_idp_client.dart'
     as _i14;
+import 'package:serverpod_auth_core_client/serverpod_auth_core_client.dart'
+    as _i15;
 export 'final_canvas_msg.dart';
 export 'game_state_change_msg.dart';
 export 'greetings/greeting.dart';
@@ -34,6 +35,7 @@ export 'player.dart';
 export 'room.dart';
 export 'room_subscribe_msg.dart';
 export 'stroke.dart';
+export 'stroke_rejected_msg.dart';
 export 'stroke_sync_msg.dart';
 export 'stroke_undo_msg.dart';
 export 'target_image.dart';
@@ -94,14 +96,17 @@ class Protocol extends _i1.SerializationManager {
     if (t == _i8.Stroke) {
       return _i8.Stroke.fromJson(data) as T;
     }
-    if (t == _i9.StrokeSyncMsg) {
-      return _i9.StrokeSyncMsg.fromJson(data) as T;
+    if (t == _i9.StrokeRejectedMsg) {
+      return _i9.StrokeRejectedMsg.fromJson(data) as T;
     }
-    if (t == _i10.StrokeUndoMsg) {
-      return _i10.StrokeUndoMsg.fromJson(data) as T;
+    if (t == _i10.StrokeSyncMsg) {
+      return _i10.StrokeSyncMsg.fromJson(data) as T;
     }
-    if (t == _i11.TargetImage) {
-      return _i11.TargetImage.fromJson(data) as T;
+    if (t == _i11.StrokeUndoMsg) {
+      return _i11.StrokeUndoMsg.fromJson(data) as T;
+    }
+    if (t == _i12.TargetImage) {
+      return _i12.TargetImage.fromJson(data) as T;
     }
     if (t == _i1.getType<_i2.FinalCanvasMsg?>()) {
       return (data != null ? _i2.FinalCanvasMsg.fromJson(data) : null) as T;
@@ -124,27 +129,30 @@ class Protocol extends _i1.SerializationManager {
     if (t == _i1.getType<_i8.Stroke?>()) {
       return (data != null ? _i8.Stroke.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i9.StrokeSyncMsg?>()) {
-      return (data != null ? _i9.StrokeSyncMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i9.StrokeRejectedMsg?>()) {
+      return (data != null ? _i9.StrokeRejectedMsg.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i10.StrokeUndoMsg?>()) {
-      return (data != null ? _i10.StrokeUndoMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i10.StrokeSyncMsg?>()) {
+      return (data != null ? _i10.StrokeSyncMsg.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i11.TargetImage?>()) {
-      return (data != null ? _i11.TargetImage.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i11.StrokeUndoMsg?>()) {
+      return (data != null ? _i11.StrokeUndoMsg.fromJson(data) : null) as T;
+    }
+    if (t == _i1.getType<_i12.TargetImage?>()) {
+      return (data != null ? _i12.TargetImage.fromJson(data) : null) as T;
     }
     if (t == List<double>) {
       return (data as List).map((e) => deserialize<double>(e)).toList() as T;
     }
-    if (t == List<_i12.Player>) {
-      return (data as List).map((e) => deserialize<_i12.Player>(e)).toList()
+    if (t == List<_i13.Player>) {
+      return (data as List).map((e) => deserialize<_i13.Player>(e)).toList()
           as T;
     }
     try {
-      return _i13.Protocol().deserialize<T>(data, t);
+      return _i14.Protocol().deserialize<T>(data, t);
     } on _i1.DeserializationTypeNotFoundException catch (_) {}
     try {
-      return _i14.Protocol().deserialize<T>(data, t);
+      return _i15.Protocol().deserialize<T>(data, t);
     } on _i1.DeserializationTypeNotFoundException catch (_) {}
     return super.deserialize<T>(data, t);
   }
@@ -158,9 +166,10 @@ class Protocol extends _i1.SerializationManager {
       _i6.Room => 'Room',
       _i7.RoomSubscribeMsg => 'RoomSubscribeMsg',
       _i8.Stroke => 'Stroke',
-      _i9.StrokeSyncMsg => 'StrokeSyncMsg',
-      _i10.StrokeUndoMsg => 'StrokeUndoMsg',
-      _i11.TargetImage => 'TargetImage',
+      _i9.StrokeRejectedMsg => 'StrokeRejectedMsg',
+      _i10.StrokeSyncMsg => 'StrokeSyncMsg',
+      _i11.StrokeUndoMsg => 'StrokeUndoMsg',
+      _i12.TargetImage => 'TargetImage',
       _ => null,
     };
   }
@@ -192,18 +201,20 @@ class Protocol extends _i1.SerializationManager {
         return 'RoomSubscribeMsg';
       case _i8.Stroke():
         return 'Stroke';
-      case _i9.StrokeSyncMsg():
+      case _i9.StrokeRejectedMsg():
+        return 'StrokeRejectedMsg';
+      case _i10.StrokeSyncMsg():
         return 'StrokeSyncMsg';
-      case _i10.StrokeUndoMsg():
+      case _i11.StrokeUndoMsg():
         return 'StrokeUndoMsg';
-      case _i11.TargetImage():
+      case _i12.TargetImage():
         return 'TargetImage';
     }
-    className = _i13.Protocol().getClassNameForObject(data);
+    className = _i14.Protocol().getClassNameForObject(data);
     if (className != null) {
       return 'serverpod_auth_idp.$className';
     }
-    className = _i14.Protocol().getClassNameForObject(data);
+    className = _i15.Protocol().getClassNameForObject(data);
     if (className != null) {
       return 'serverpod_auth_core.$className';
     }
@@ -237,22 +248,25 @@ class Protocol extends _i1.SerializationManager {
     if (dataClassName == 'Stroke') {
       return deserialize<_i8.Stroke>(data['data']);
     }
+    if (dataClassName == 'StrokeRejectedMsg') {
+      return deserialize<_i9.StrokeRejectedMsg>(data['data']);
+    }
     if (dataClassName == 'StrokeSyncMsg') {
-      return deserialize<_i9.StrokeSyncMsg>(data['data']);
+      return deserialize<_i10.StrokeSyncMsg>(data['data']);
     }
     if (dataClassName == 'StrokeUndoMsg') {
-      return deserialize<_i10.StrokeUndoMsg>(data['data']);
+      return deserialize<_i11.StrokeUndoMsg>(data['data']);
     }
     if (dataClassName == 'TargetImage') {
-      return deserialize<_i11.TargetImage>(data['data']);
+      return deserialize<_i12.TargetImage>(data['data']);
     }
     if (dataClassName.startsWith('serverpod_auth_idp.')) {
       data['className'] = dataClassName.substring(19);
-      return _i13.Protocol().deserializeByClassName(data);
+      return _i14.Protocol().deserializeByClassName(data);
     }
     if (dataClassName.startsWith('serverpod_auth_core.')) {
       data['className'] = dataClassName.substring(20);
-      return _i14.Protocol().deserializeByClassName(data);
+      return _i15.Protocol().deserializeByClassName(data);
     }
     return super.deserializeByClassName(data);
   }
@@ -267,10 +281,10 @@ class Protocol extends _i1.SerializationManager {
       return null;
     }
     try {
-      return _i13.Protocol().mapRecordToJson(record);
+      return _i14.Protocol().mapRecordToJson(record);
     } catch (_) {}
     try {
-      return _i14.Protocol().mapRecordToJson(record);
+      return _i15.Protocol().mapRecordToJson(record);
     } catch (_) {}
     throw Exception('Unsupported record type ${record.runtimeType}');
   }

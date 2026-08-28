@@ -134,19 +134,27 @@ void main() {
       );
       expect(stored.map((s) => s.points), drawers.map(insideRegion));
 
-      // Each drawer sees the other two but not their own — the client already
-      // has that one on screen.
+      // Each drawer sees all three completed strokes, their own included: the
+      // echoed `end` carries the server's clamped copy and is what confirms it.
+      // Only their own in-progress batches are held back, so their own stroke
+      // arrives once where the others arrive twice.
       for (final drawer in drawers) {
-        final seen = connections[drawer.id!]!.strokes
-            .map((s) => s.strokeId)
-            .toSet();
+        final received = connections[drawer.id!]!.strokes;
         expect(
-          seen,
-          drawers
-              .where((other) => other.id != drawer.id)
-              .map((other) => 'stroke-${other.id}')
-              .toSet(),
+          received.map((s) => s.strokeId).toSet(),
+          drawers.map((other) => 'stroke-${other.id}').toSet(),
           reason: 'as seen by ${drawer.name}',
+        );
+        final own = received.where((s) => s.strokeId == 'stroke-${drawer.id}');
+        expect(
+          own.map((s) => s.action),
+          ['end'],
+          reason: '${drawer.name} receives only the end of their own stroke',
+        );
+        expect(
+          own.single.points,
+          insideRegion(drawer),
+          reason: "${drawer.name}'s confirmation carries the server's points",
         );
       }
 

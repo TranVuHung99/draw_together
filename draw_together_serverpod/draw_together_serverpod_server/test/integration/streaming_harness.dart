@@ -15,6 +15,8 @@ class StreamConnection {
   List<StrokeSyncMsg> get strokes =>
       received.whereType<StrokeSyncMsg>().toList();
   List<StrokeUndoMsg> get undos => received.whereType<StrokeUndoMsg>().toList();
+  List<StrokeRejectedMsg> get rejections =>
+      received.whereType<StrokeRejectedMsg>().toList();
   List<GameStateChangeMsg> get stateChanges =>
       received.whereType<GameStateChangeMsg>().toList();
   List<FinalCanvasMsg> get composites =>
@@ -71,6 +73,31 @@ class RoomClients {
     );
     await settle();
     return connection;
+  }
+
+  /// Sends one message of a stroke, so a stroke can be started and left open —
+  /// which is what a pause or a disconnect mid-stroke looks like to the server.
+  Future<void> sendStroke(
+    StreamConnection connection,
+    int playerId,
+    String strokeId,
+    String action,
+    List<double> points, {
+    bool isEraser = false,
+    String colorInfo = '0xFFFF0000',
+  }) async {
+    connection.outgoing.add(
+      strokeMsg(
+        roomId: roomId,
+        playerId: playerId,
+        strokeId: strokeId,
+        action: action,
+        points: points,
+        colorInfo: colorInfo,
+        isEraser: isEraser,
+      ),
+    );
+    await settle();
   }
 
   /// Draws one complete stroke and returns its id.

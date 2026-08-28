@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/png_download.dart';
 import '../../providers/game_providers.dart';
 import '../../providers/controllers/target_image_controller.dart';
+import '../../providers/controllers/websocket_service.dart';
 import 'lobby_screen.dart';
 
 /// Shows the composite the server generated, as the SVG document it sent.
@@ -189,8 +190,16 @@ class _FinalResultScreenState extends ConsumerState<FinalResultScreen> {
   }
 
   void _backToLobby() {
+    // Leaving the room is the one thing that stops the reconnect loop short of
+    // disposing the service: a dropped stream is worth re-establishing, a
+    // departure is not.
+    ref.read(webSocketServiceProvider).disconnect();
+
     // Clear state
     ref.read(strokesProvider.notifier).clear();
+    ref.read(pendingStrokesProvider.notifier).clear();
+    ref.read(strokeRejectionProvider.notifier).set(null);
+    ref.read(rosterRefreshFailedProvider.notifier).set(false);
     ref.read(finalCanvasSvgProvider.notifier).set(null);
     ref.read(targetImageProvider.notifier).clear();
     ref.read(revealedTargetProvider.notifier).set(null);

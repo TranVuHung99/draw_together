@@ -74,16 +74,6 @@ class GameEndFutureCall extends FutureCall {
     }
 
     final finished = room.copyWith(status: 'FINISHED');
-    await Room.db.updateRow(session, finished);
-
-    await session.messages.postMessage(
-      'room_$roomId',
-      GameStateChangeMsg(
-        roomId: roomId,
-        status: 'FINISHED',
-        endTime: room.endTime,
-      ),
-    );
 
     final players = await Player.db.find(
       session,
@@ -96,16 +86,31 @@ class GameEndFutureCall extends FutureCall {
       orderBy: (s) => s.sequence,
     );
 
+    // Composed before the row is written, so a room is never `FINISHED`
+    // without the composite that a client subscribing to it is owed. It is
+    // stored rather than only broadcast: the broadcast happens once, at the
+    // one instant every client in the room is at risk together, and a client
+    // that misses it could otherwise never obtain the document at all.
+    final svg = composeCanvasSvg(
+      room: finished,
+      players: players,
+      strokes: strokes,
+    );
+
+    await Room.db.updateRow(session, finished.copyWith(finalSvg: svg));
+
     await session.messages.postMessage(
       'room_$roomId',
-      FinalCanvasMsg(
+      GameStateChangeMsg(
         roomId: roomId,
-        svg: composeCanvasSvg(
-          room: finished,
-          players: players,
-          strokes: strokes,
-        ),
+        status: 'FINISHED',
+        endTime: room.endTime,
       ),
+    );
+
+    await session.messages.postMessage(
+      'room_$roomId',
+      FinalCanvasMsg(roomId: roomId, svg: svg),
     );
 
     session.log(

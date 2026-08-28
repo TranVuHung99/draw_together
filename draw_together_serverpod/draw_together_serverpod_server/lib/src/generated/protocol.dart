@@ -25,11 +25,12 @@ import 'player.dart' as _i9;
 import 'room.dart' as _i10;
 import 'room_subscribe_msg.dart' as _i11;
 import 'stroke.dart' as _i12;
-import 'stroke_sync_msg.dart' as _i13;
-import 'stroke_undo_msg.dart' as _i14;
-import 'target_image.dart' as _i15;
+import 'stroke_rejected_msg.dart' as _i13;
+import 'stroke_sync_msg.dart' as _i14;
+import 'stroke_undo_msg.dart' as _i15;
+import 'target_image.dart' as _i16;
 import 'package:draw_together_serverpod_server/src/generated/player.dart'
-    as _i16;
+    as _i17;
 export 'final_canvas_msg.dart';
 export 'game_state_change_msg.dart';
 export 'greetings/greeting.dart';
@@ -37,6 +38,7 @@ export 'player.dart';
 export 'room.dart';
 export 'room_subscribe_msg.dart';
 export 'stroke.dart';
+export 'stroke_rejected_msg.dart';
 export 'stroke_sync_msg.dart';
 export 'stroke_undo_msg.dart';
 export 'target_image.dart';
@@ -183,6 +185,12 @@ class Protocol extends _i1.SerializationManagerServer {
           columnType: _i2.ColumnType.bigint,
           isNullable: true,
           dartType: 'int?',
+        ),
+        _i2.ColumnDefinition(
+          name: 'finalSvg',
+          columnType: _i2.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
         ),
       ],
       foreignKeys: [],
@@ -447,14 +455,17 @@ class Protocol extends _i1.SerializationManagerServer {
     if (t == _i12.Stroke) {
       return _i12.Stroke.fromJson(data) as T;
     }
-    if (t == _i13.StrokeSyncMsg) {
-      return _i13.StrokeSyncMsg.fromJson(data) as T;
+    if (t == _i13.StrokeRejectedMsg) {
+      return _i13.StrokeRejectedMsg.fromJson(data) as T;
     }
-    if (t == _i14.StrokeUndoMsg) {
-      return _i14.StrokeUndoMsg.fromJson(data) as T;
+    if (t == _i14.StrokeSyncMsg) {
+      return _i14.StrokeSyncMsg.fromJson(data) as T;
     }
-    if (t == _i15.TargetImage) {
-      return _i15.TargetImage.fromJson(data) as T;
+    if (t == _i15.StrokeUndoMsg) {
+      return _i15.StrokeUndoMsg.fromJson(data) as T;
+    }
+    if (t == _i16.TargetImage) {
+      return _i16.TargetImage.fromJson(data) as T;
     }
     if (t == _i1.getType<_i5.FinalCanvasMsg?>()) {
       return (data != null ? _i5.FinalCanvasMsg.fromJson(data) : null) as T;
@@ -483,20 +494,23 @@ class Protocol extends _i1.SerializationManagerServer {
     if (t == _i1.getType<_i12.Stroke?>()) {
       return (data != null ? _i12.Stroke.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i13.StrokeSyncMsg?>()) {
-      return (data != null ? _i13.StrokeSyncMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i13.StrokeRejectedMsg?>()) {
+      return (data != null ? _i13.StrokeRejectedMsg.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i14.StrokeUndoMsg?>()) {
-      return (data != null ? _i14.StrokeUndoMsg.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i14.StrokeSyncMsg?>()) {
+      return (data != null ? _i14.StrokeSyncMsg.fromJson(data) : null) as T;
     }
-    if (t == _i1.getType<_i15.TargetImage?>()) {
-      return (data != null ? _i15.TargetImage.fromJson(data) : null) as T;
+    if (t == _i1.getType<_i15.StrokeUndoMsg?>()) {
+      return (data != null ? _i15.StrokeUndoMsg.fromJson(data) : null) as T;
+    }
+    if (t == _i1.getType<_i16.TargetImage?>()) {
+      return (data != null ? _i16.TargetImage.fromJson(data) : null) as T;
     }
     if (t == List<double>) {
       return (data as List).map((e) => deserialize<double>(e)).toList() as T;
     }
-    if (t == List<_i16.Player>) {
-      return (data as List).map((e) => deserialize<_i16.Player>(e)).toList()
+    if (t == List<_i17.Player>) {
+      return (data as List).map((e) => deserialize<_i17.Player>(e)).toList()
           as T;
     }
     try {
@@ -522,9 +536,10 @@ class Protocol extends _i1.SerializationManagerServer {
       _i10.Room => 'Room',
       _i11.RoomSubscribeMsg => 'RoomSubscribeMsg',
       _i12.Stroke => 'Stroke',
-      _i13.StrokeSyncMsg => 'StrokeSyncMsg',
-      _i14.StrokeUndoMsg => 'StrokeUndoMsg',
-      _i15.TargetImage => 'TargetImage',
+      _i13.StrokeRejectedMsg => 'StrokeRejectedMsg',
+      _i14.StrokeSyncMsg => 'StrokeSyncMsg',
+      _i15.StrokeUndoMsg => 'StrokeUndoMsg',
+      _i16.TargetImage => 'TargetImage',
       _ => null,
     };
   }
@@ -558,11 +573,13 @@ class Protocol extends _i1.SerializationManagerServer {
         return 'RoomSubscribeMsg';
       case _i12.Stroke():
         return 'Stroke';
-      case _i13.StrokeSyncMsg():
+      case _i13.StrokeRejectedMsg():
+        return 'StrokeRejectedMsg';
+      case _i14.StrokeSyncMsg():
         return 'StrokeSyncMsg';
-      case _i14.StrokeUndoMsg():
+      case _i15.StrokeUndoMsg():
         return 'StrokeUndoMsg';
-      case _i15.TargetImage():
+      case _i16.TargetImage():
         return 'TargetImage';
     }
     className = _i2.Protocol().getClassNameForObject(data);
@@ -610,14 +627,17 @@ class Protocol extends _i1.SerializationManagerServer {
     if (dataClassName == 'Stroke') {
       return deserialize<_i12.Stroke>(data['data']);
     }
+    if (dataClassName == 'StrokeRejectedMsg') {
+      return deserialize<_i13.StrokeRejectedMsg>(data['data']);
+    }
     if (dataClassName == 'StrokeSyncMsg') {
-      return deserialize<_i13.StrokeSyncMsg>(data['data']);
+      return deserialize<_i14.StrokeSyncMsg>(data['data']);
     }
     if (dataClassName == 'StrokeUndoMsg') {
-      return deserialize<_i14.StrokeUndoMsg>(data['data']);
+      return deserialize<_i15.StrokeUndoMsg>(data['data']);
     }
     if (dataClassName == 'TargetImage') {
-      return deserialize<_i15.TargetImage>(data['data']);
+      return deserialize<_i16.TargetImage>(data['data']);
     }
     if (dataClassName.startsWith('serverpod.')) {
       data['className'] = dataClassName.substring(10);
@@ -661,8 +681,8 @@ class Protocol extends _i1.SerializationManagerServer {
         return _i10.Room.t;
       case _i12.Stroke:
         return _i12.Stroke.t;
-      case _i15.TargetImage:
-        return _i15.TargetImage.t;
+      case _i16.TargetImage:
+        return _i16.TargetImage.t;
     }
     return null;
   }

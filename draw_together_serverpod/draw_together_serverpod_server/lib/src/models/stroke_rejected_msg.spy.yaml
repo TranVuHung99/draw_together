@@ -1,0 +1,11 @@
+class: StrokeRejectedMsg
+fields:
+  roomId: int
+  # The player whose stroke was refused. This message is written straight to
+  # that client's own stream and never posted to the room channel, so no one
+  # else learns that their stroke was refused.
+  playerId: int
+  strokeId: String
+  # Which rule refused it: 'NOT_PLAYING', 'NO_REGION', or 'NOT_OWNER'. Carried
+  # so the client can say something true rather than "something went wrong".
+  reason: String
