@@ -230,6 +230,24 @@ class GameStreamingEndpoint extends Endpoint {
           ),
         );
 
+        // And the roster, asked for from here rather than fetched by the client
+        // on its own initiative.
+        //
+        // A client cannot close this gap for itself. Its roster fetch is a
+        // separate call that it issues as soon as it has queued its subscribe
+        // message, which is before this connection has processed that message
+        // and started listening. A player joining in that window is missed
+        // twice over — absent from the response, and their `PLAYER_JOINED` was
+        // posted to the channel before there was anything here to receive it —
+        // and no later message ever corrects it.
+        //
+        // Asking for the refresh from here orders it after the subscription
+        // above, so a join landing in the window is buffered and delivered
+        // below instead of falling through both.
+        out.add(
+          GameStateChangeMsg(roomId: room.id!, status: 'PLAYER_JOINED'),
+        );
+
         // Navigating to the result is driven by the composite arriving, so a
         // finished room has to hand over the document it stored as well as its
         // status.

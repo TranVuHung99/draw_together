@@ -36,18 +36,35 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
   @override
   void initState() {
     super.initState();
-    _connectToRoom();
+    // After the frame rather than during it. Connecting resets the canvas
+    // providers and publishes a connection status, and Riverpod refuses a
+    // provider write from `initState`. That refusal is thrown *inside*
+    // `connect`, before it sends `RoomSubscribeMsg` — so the stream opened,
+    // the client subscribed to no room, and nothing was ever delivered to it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _connectToRoom();
+    });
   }
 
   void _connectToRoom() async {
     final room = ref.read(roomProvider);
     final player = ref.read(currentPlayerProvider);
-    if (room != null && player != null) {
-      await ref.read(webSocketServiceProvider).connect(room.id!, player.id!);
-      // Refresh players upon joining
-      final players = await client.room.getPlayersInRoom(room.id!);
-      ref.read(playersProvider.notifier).set(players);
+    if (room == null || player == null) {
+      // Nothing connects, so nothing is ever received. Saying so beats a
+      // waiting room that looks fine and is attached to no channel at all.
+      debugPrint(
+        'Not connecting: room is ${room?.id}, player is ${player?.id}',
+      );
+      return;
     }
+
+    // The roster is not fetched here. A fetch issued alongside the subscribe
+    // races the server's processing of it, and a player joining in that window
+    // is missed by the response and by the broadcast alike. The server asks for
+    // the refresh once this connection is listening, which is the only point
+    // from which the request cannot fall into that gap.
+    await ref.read(webSocketServiceProvider).connect(room.id!, player.id!);
   }
 
   void _startGame() async {
@@ -72,7 +89,9 @@ class _RoomWaitingScreenState extends ConsumerState<RoomWaitingScreen> {
     if (bytes == null) return;
 
     if (bytes.length > maxTargetImageBytes) {
-      _report('That image is larger than ${maxTargetImageBytes ~/ (1024 * 1024)} MB');
+      _report(
+        'That image is larger than ${maxTargetImageBytes ~/ (1024 * 1024)} MB',
+      );
       return;
     }
 

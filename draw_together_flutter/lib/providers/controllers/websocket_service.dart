@@ -62,6 +62,16 @@ class WebSocketService {
   /// with. Reset by a fresh `connect`.
   int _failedAttempts = 0;
 
+  /// Sequences roster refreshes, so only the newest may write.
+  ///
+  /// Two refreshes are routinely in flight at once — the one on entering the
+  /// room and the one a `PLAYER_JOINED` triggers — and their responses can land
+  /// in either order. Without this, a slow older response overwrites a newer
+  /// one and reverts the roster to a snapshot taken before the player it is
+  /// missing had joined: the join is delivered and applied, and then silently
+  /// undone. The retry loop below widens that window to seconds.
+  int _rosterGeneration = 0;
+
   bool _disposed = false;
 
   WebSocketService(this.ref);
@@ -122,6 +132,7 @@ class WebSocketService {
     // The playerId is what lets the server keep this client's own in-progress
     // strokes from being echoed back to it, and what it verifies a stroke's
     // claimed author against.
+    debugPrint('Subscribing to room $roomId as player $playerId');
     outgoing.add(RoomSubscribeMsg(roomId: roomId, playerId: playerId));
   }
 
@@ -189,9 +200,11 @@ class WebSocketService {
       // rather than the room channel, so nobody else learns the stroke was
       // refused.
       ref.read(pendingStrokesProvider.notifier).remove(message.strokeId);
-      ref.read(strokeRejectionProvider.notifier).set(
-        StrokeRejection(strokeId: message.strokeId, reason: message.reason),
-      );
+      ref
+          .read(strokeRejectionProvider.notifier)
+          .set(
+            StrokeRejection(strokeId: message.strokeId, reason: message.reason),
+          );
     } else if (message is StrokeUndoMsg) {
       // The server confirms every undo, including the local player's own, and
       // uses the same message to retract a stroke it has abandoned, so this is
@@ -202,33 +215,43 @@ class WebSocketService {
 
       // Update Room status
       final room = ref.read(roomProvider);
-      if (room != null && room.id == message.roomId) {
-        if (message.status == 'PLAYER_JOINED') {
-          // We could refetch players or just know a change happened.
-          // Easiest is to trigger a refresh via RoomController.
+      if (room == null || room.id != message.roomId) {
+        // Dropping this silently is how a client sits in a lobby that has
+        // already started: the message arrived and was discarded because the
+        // local room was missing or was some other room.
+        debugPrint(
+          'Dropped ${message.status} for room ${message.roomId}: '
+          'local room is ${room?.id}',
+        );
+        return;
+      }
+
+      if (message.status == 'PLAYER_JOINED') {
+        // A signal to reload the roster rather than a room status. The server
+        // sends one on subscribe too, from a point where it cannot race the
+        // client's own view of who is in the room.
+        refreshPlayers(message.roomId);
+      } else {
+        // `endTime` and `remainingMs` are each other's opposite — the server
+        // clears one as it sets the other — so both are applied from every
+        // change rather than only the one the new status happens to use.
+        ref
+            .read(roomProvider.notifier)
+            .set(
+              room.copyWith(
+                status: message.status,
+                endTime: message.endTime,
+                remainingMs: message.remainingMs,
+              ),
+            );
+        if (message.status == 'PLAYING') {
+          // Regions are assigned as the game starts, so the local player and
+          // the roster are both stale from this moment.
           refreshPlayers(message.roomId);
-        } else {
-          // `endTime` and `remainingMs` are each other's opposite — the server
-          // clears one as it sets the other — so both are applied from every
-          // change rather than only the one the new status happens to use.
-          ref
-              .read(roomProvider.notifier)
-              .set(
-                room.copyWith(
-                  status: message.status,
-                  endTime: message.endTime,
-                  remainingMs: message.remainingMs,
-                ),
-              );
-          if (message.status == 'PLAYING') {
-            // Regions are assigned as the game starts, so the local player and
-            // the roster are both stale from this moment.
-            refreshPlayers(message.roomId);
-            // The crop is cut from the same regions, so it is fetched here
-            // too. A client that never sees this message fetches it on
-            // entering the game screen instead.
-            ref.read(targetImageControllerProvider).load();
-          }
+          // The crop is cut from the same regions, so it is fetched here
+          // too. A client that never sees this message fetches it on
+          // entering the game screen instead.
+          ref.read(targetImageControllerProvider).load();
         }
       }
     } else if (message is FinalCanvasMsg) {
@@ -254,12 +277,21 @@ class WebSocketService {
   /// drawing: it holds no region, so `canDrawProvider` closes the canvas and
   /// nothing on screen explains why. Worse, it may hold a *stale* region and
   /// clamp to a rectangle the server no longer agrees with.
+  ///
+  /// A superseded refresh abandons its result rather than writing it. This is
+  /// the only writer to the roster that can have several calls in flight, and
+  /// an older response landing last is how a joined player disappears again —
+  /// or, once the game starts, how a client ends up holding a roster with no
+  /// regions in it and a canvas that will not accept input.
   Future<void> refreshPlayers(int roomId) async {
+    final generation = ++_rosterGeneration;
+    bool superseded() => _disposed || generation != _rosterGeneration;
+
     for (var attempt = 1; attempt <= _rosterAttempts; attempt++) {
-      if (_disposed) return;
+      if (superseded()) return;
       try {
         final players = await client.room.getPlayersInRoom(roomId);
-        if (_disposed) return;
+        if (superseded()) return;
         ref.read(playersProvider.notifier).set(players);
 
         // Keep the local player in step with the roster, so its region is not
@@ -282,7 +314,9 @@ class WebSocketService {
       }
     }
 
-    if (_disposed) return;
+    // A superseded refresh does not report its own failure either: a newer one
+    // is the authority on whether the roster is reachable.
+    if (superseded()) return;
     ref.read(rosterRefreshFailedProvider.notifier).set(true);
   }
 
